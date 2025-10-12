@@ -265,47 +265,54 @@
     const loginForm = document.getElementById('loginForm');
     const errorMessageDiv = document.getElementById('loginErrorMessage');
 
-    // Open login modal when login button is clicked
-    loginButton.addEventListener('click', function (e) {
-      e.preventDefault(); // Prevent default link behavior
+    // Open login modal when login button is clicked (only if login button exists)
+    if (loginButton) {
+      loginButton.addEventListener('click', function (e) {
+        e.preventDefault(); // Prevent default link behavior
 
-      // Hide error message when opening the modal fresh
-      errorMessageDiv.style.display = 'none';
+        // Hide error message when opening the modal fresh
+        errorMessageDiv.style.display = 'none';
 
-      // Close the sidebar first
-      const sidebarModal = document.getElementById('sidebarModal');
-      const sidebarOverlay = document.getElementById('sidebarOverlay');
-      sidebarModal.classList.remove('show');
-      sidebarOverlay.classList.remove('show');
+        // Close the sidebar first
+        const sidebarModal = document.getElementById('sidebarModal');
+        const sidebarOverlay = document.getElementById('sidebarOverlay');
+        sidebarModal.classList.remove('show');
+        sidebarOverlay.classList.remove('show');
 
-      // Then show the login modal
-      loginModalOverlay.classList.add('active');
-    });
+        // Then show the login modal
+        loginModalOverlay.classList.add('active');
+      });
+    }
 
     // Close login modal when X button is clicked
-    closeLoginModal.addEventListener('click', function () {
-      loginModalOverlay.classList.remove('active');
-      document.body.style.overflow = '';
-    });
-
-    // Close login modal when clicking outside the modal
-    loginModalOverlay.addEventListener('mousedown', function (e) {
-      if (e.target === loginModalOverlay) {
+    if (closeLoginModal) {
+      closeLoginModal.addEventListener('click', function () {
         loginModalOverlay.classList.remove('active');
         document.body.style.overflow = '';
-      }
-    });
+      });
+    }
+
+    // Close login modal when clicking outside the modal
+    if (loginModalOverlay) {
+      loginModalOverlay.addEventListener('mousedown', function (e) {
+        if (e.target === loginModalOverlay) {
+          loginModalOverlay.classList.remove('active');
+          document.body.style.overflow = '';
+        }
+      });
+    }
 
     // Handle login form submission
-    loginForm.addEventListener('submit', function (e) {
-      e.preventDefault(); // Prevent default form submission
+    if (loginForm) {
+      loginForm.addEventListener('submit', function (e) {
+        e.preventDefault(); // Prevent default form submission
 
-      errorMessageDiv.style.display = 'none';
+        errorMessageDiv.style.display = 'none';
 
-      const username = document.getElementById('username').value;
-      const password = document.getElementById('password').value;
+        const username = document.getElementById('username').value;
+        const password = document.getElementById('password').value;
 
-      // Send AJAX request
+        // Send AJAX request
       fetch('/authen', {
         method: 'POST',
         headers: {
@@ -330,7 +337,8 @@
           errorMessageDiv.textContent = 'เกิดข้อผิดพลาดในการเชื่อมต่อ';
           errorMessageDiv.style.display = 'block';
         });
-    });
+      });
+    }
   });
 </script>
 
@@ -346,54 +354,63 @@
     const resErrorMessageDiv = document.getElementById('registerErrorMessage');
 
     // Show register modal when register link is clicked
-    registerLink.addEventListener('click', function (e) {
-      e.preventDefault(); // Prevent default link behavior
+    if (registerLink) {
+      registerLink.addEventListener('click', function (e) {
+        e.preventDefault(); // Prevent default link behavior
 
-      resErrorMessageDiv.style.display = 'none';
+        resErrorMessageDiv.style.display = 'none';
 
-      // Hide login modal
-      loginModalOverlay.classList.remove('active');
+        // Hide login modal
+        loginModalOverlay.classList.remove('active');
 
-      // Show register modal
-      registerModalOverlay.classList.add('active');
-    });
+        // Show register modal
+        registerModalOverlay.classList.add('active');
+      });
+    }
 
     // Close register modal when X button is clicked
-    closeRegisterModal.addEventListener('click', function () {
-      registerModalOverlay.classList.remove('active');
-      document.body.style.overflow = '';
-    });
-
-    // Close register modal when Cancel button is clicked
-    cancelRegistration.addEventListener('click', function () {
-      registerModalOverlay.classList.remove('active');
-      // Optionally show login modal again
-      loginModalOverlay.classList.add('active');
-    });
-
-    // Close register modal when clicking outside the modal
-    registerModalOverlay.addEventListener('mousedown', function (e) {
-      if (e.target === registerModalOverlay) {
+    if (closeRegisterModal) {
+      closeRegisterModal.addEventListener('click', function () {
         registerModalOverlay.classList.remove('active');
         document.body.style.overflow = '';
-      }
-    });
+      });
+    }
+
+    // Close register modal when Cancel button is clicked
+    if (cancelRegistration) {
+      cancelRegistration.addEventListener('click', function () {
+        registerModalOverlay.classList.remove('active');
+        // Optionally show login modal again
+        loginModalOverlay.classList.add('active');
+      });
+    }
+
+    // Close register modal when clicking outside the modal
+    if (registerModalOverlay) {
+      registerModalOverlay.addEventListener('mousedown', function (e) {
+        if (e.target === registerModalOverlay) {
+          registerModalOverlay.classList.remove('active');
+          document.body.style.overflow = '';
+        }
+      });
+    }
 
     // Handle registration form submission
-    registerForm.addEventListener('submit', function (e) {
-      e.preventDefault(); // Prevent default form submission
+    if (registerForm) {
+      registerForm.addEventListener('submit', function (e) {
+        e.preventDefault(); // Prevent default form submission
 
-      // Get form values
-      const username = document.getElementById('registerUsername').value;
-      const email = document.getElementById('registerEmail').value;
-      const password = document.getElementById('registerPassword').value;
-      const confirmPassword = document.getElementById('confirmPassword').value;
+        // Get form values
+        const username = document.getElementById('registerUsername').value;
+        const email = document.getElementById('registerEmail').value;
+        const password = document.getElementById('registerPassword').value;
+        const confirmPassword = document.getElementById('confirmPassword').value;
 
-      // Validate passwords match
-      if (password !== confirmPassword) {
-        resErrorMessageDiv.textContent = 'รหัสผ่านไม่ตรงกัน กรุณาตรวจสอบอีกครั้ง';
-        resErrorMessageDiv.style.display = 'block';
-        return;
+        // Validate passwords match
+        if (password !== confirmPassword) {
+          resErrorMessageDiv.textContent = 'รหัสผ่านไม่ตรงกัน กรุณาตรวจสอบอีกครั้ง';
+          resErrorMessageDiv.style.display = 'block';
+          return;
       }
 
       else if (password == confirmPassword) {
@@ -428,7 +445,8 @@
           resErrorMessageDiv.textContent = 'เกิดข้อผิดพลาดในการเชื่อมต่อ';
           resErrorMessageDiv.style.display = 'block';
         });
-    });
+      });
+    }
   });
 </script>
 

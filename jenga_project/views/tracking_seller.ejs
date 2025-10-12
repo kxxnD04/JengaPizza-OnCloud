@@ -4,6 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🍕</text></svg>">
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"></script>
@@ -89,7 +90,13 @@
 
                             <div class="row align-items-center p-3 border rounded bg-white shadow-sm mb-3">
                                 <div class="col-2">
-                                    <img src="images/<%= allder[i].order_status %>.png" class="order-icon">
+                                    <% 
+                                        let statusImage = allder[i].order_status;
+                                        if (allder[i].order_status === 'cancelled' || allder[i].order_status === 'rejected') {
+                                            statusImage = 'cancelled';
+                                        }
+                                    %>
+                                    <img src="images/<%= statusImage %>.png" class="order-icon">
                                 </div>
                                 <div class="col-6">
                                     <h5 id="<%= allder[i].order_id %>">Order No. <%= allder[i].order_id %>
@@ -109,17 +116,31 @@
                                     <p class="text-muted timestamp">อัพเดทเมื่อ : </p>
                                 </div>
                                 <div class="col-4 text-right">
-                                    <select id="<%= allder[i].order_status %>" class="form-control status-dropdown"
-                                        data-order-id="<%= allder[i].order_id %>">
-                                        <option value="pending">pending</option>
-                                        <option value="preparing">preparing</option>
-                                        <option value="delivering">delivering</option>
-                                        <option value="success">success</option>
-                                    </select>
-                                    <div class="mt-3">
-                                        <button class="btn btn-update ">อัพเดท</button>
-                                    </div>
-                                    
+                                    <% if (allder[i].order_status === 'pending') { %>
+                                        <!-- สำหรับ order ที่รอการอนุมัติ -->
+                                        <div class="btn-group-vertical" style="width: 100%;">
+                                            <button class="btn btn-success mb-2 btn-verify" data-order-id="<%= allder[i].order_id %>">
+                                                ✓ อนุมัติการชำระเงิน
+                                            </button>
+                                            <button class="btn btn-danger btn-reject" data-order-id="<%= allder[i].order_id %>">
+                                                ✗ ปฏิเสธการชำระเงิน
+                                            </button>
+                                        </div>
+                                    <% } else if (allder[i].order_status !== 'cancelled' && allder[i].order_status !== 'rejected' && allder[i].order_status !== 'success') { %>
+                                        <!-- สำหรับ order ที่กำลังดำเนินการ -->
+                                        <select class="form-control status-dropdown mb-2" data-order-id="<%= allder[i].order_id %>">
+                                            <option value="preparing" <%= allder[i].order_status === 'preparing' ? 'selected' : '' %>>preparing</option>
+                                            <option value="delivering" <%= allder[i].order_status === 'delivering' ? 'selected' : '' %>>delivering</option>
+                                            <option value="success" <%= allder[i].order_status === 'success' ? 'selected' : '' %>>success</option>
+                                        </select>
+                                        <button class="btn btn-update">อัพเดท</button>
+                                    <% } else { %>
+                                        <!-- สำหรับ order ที่เสร็จสิ้นแล้ว -->
+                                        <span class="badge badge-<%= allder[i].order_status === 'success' ? 'success' : 'secondary' %> p-3">
+                                            <%= allder[i].order_status === 'success' ? 'ส่งสำเร็จ' : 
+                                                allder[i].order_status === 'cancelled' ? 'ยกเลิกแล้ว' : 'ปฏิเสธแล้ว' %>
+                                        </span>
+                                    <% } %>
                                 </div>
                             </div>
 
@@ -129,6 +150,69 @@
             </div>
         </div>
     </div>
+
+    <!-- Modal สำหรับอนุมัติการชำระเงิน -->
+    <div class="modal fade" id="verifyPaymentModal" role="dialog" aria-labelledby="verifyPaymentModalLabel">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title" id="verifyPaymentModalLabel">อนุมัติการชำระเงิน</h5>
+                    <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <p>คุณต้องการอนุมัติการชำระเงินสำหรับคำสั่งซื้อนี้หรือไม่?</p>
+                    <p class="text-muted">หลังจากอนุมัติแล้ว สินค้าจะถูกหักออกจาก stock </p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-success" id="confirmVerifyBtn">ยืนยันการอนุมัติ</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal สำหรับปฏิเสธการชำระเงิน -->
+    <div class="modal fade" id="rejectPaymentModal" role="dialog" aria-labelledby="rejectPaymentModalLabel">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title" id="rejectPaymentModalLabel">ปฏิเสธการชำระเงิน</h5>
+                    <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <p>คุณต้องการปฏิเสธการชำระเงินสำหรับคำสั่งซื้อนี้หรือไม่?</p>
+                    <p class="text-danger">คำสั่งซื้อจะถูกยกเลิกและไม่สามารถกู้คืนได้</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-danger" id="confirmRejectBtn">ยืนยันการปฏิเสธ</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal สำหรับแสดงผลลัพธ์ -->
+    <div class="modal fade" id="resultModal" role="dialog" aria-labelledby="resultModalLabel">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content">
+                <div class="modal-header" id="resultModalHeader">
+                    <h5 class="modal-title" id="resultModalLabel">ผลลัพธ์</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body" id="resultModalBody">
+                    <!-- Message will be inserted here -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" data-dismiss="modal">ตกลง</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         function getCurrentDateTime() {
             const now = new Date();
@@ -158,16 +242,6 @@
     </script>
 
 <script>
-    document.addEventListener("DOMContentLoaded", function () {
-      // Select all dropdowns
-      document.querySelectorAll(".status-dropdown").forEach(dropdown => {
-        let orderStatus = dropdown.id; // Get the id (which is the order_status)
-        dropdown.value = orderStatus; // Set the selected value
-      });
-    });
-  </script>
-
-<script>
     $(".btn-update").on("click", function (e) {
       e.preventDefault(); // Prevent default behavior (form submission)
   
@@ -194,6 +268,124 @@
         })
         .catch(error => console.error('Error:', error));
     });
+
+    // ปุ่มอนุมัติการชำระเงิน
+    let selectedVerifyOrderId = null;
+
+    $(".btn-verify").on("click", function (e) {
+      e.preventDefault();
+      selectedVerifyOrderId = $(this).data("order-id");
+      $('#verifyPaymentModal').modal('show');
+    });
+
+    // จัดการการปิด Modal (ปุ่ม X)
+    $('#verifyPaymentModal').on('hidden.bs.modal', function () {
+      selectedVerifyOrderId = null;
+    });
+
+    $('#rejectPaymentModal').on('hidden.bs.modal', function () {
+      selectedRejectOrderId = null;
+    });
+
+    // จัดการปุ่มกากบาท (X) ให้ปิด Modal ได้
+    $('#verifyPaymentModal .close').on('click', function() {
+      $('#verifyPaymentModal').modal('hide');
+    });
+
+    $('#rejectPaymentModal .close').on('click', function() {
+      $('#rejectPaymentModal').modal('hide');
+    });
+
+    $('#resultModal .close').on('click', function() {
+      $('#resultModal').modal('hide');
+    });
+
+    // ปิด Modal เมื่อคลิกนอก Modal
+    $(document).on('click', '.modal', function(e) {
+      if ($(e.target).hasClass('modal')) {
+        $(this).modal('hide');
+      }
+    });
+
+    $('#resultModal').on('hidden.bs.modal', function () {
+      // Reset modal header class
+      $('#resultModalHeader').removeClass('bg-success bg-danger text-white');
+    });
+
+    // ยืนยันการอนุมัติจาก Modal
+    $("#confirmVerifyBtn").on("click", function () {
+      if (selectedVerifyOrderId) {
+        // ปิด modal และส่ง request
+        $('#verifyPaymentModal').modal('hide');
+        
+        fetch('/verify_payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ order_id: selectedVerifyOrderId })
+        })
+          .then(response => response.json())
+          .then(data => {
+            if (data.success) {
+              showResultModal('success', 'สำเร็จ', 'อนุมัติการชำระเงินสำเร็จ');
+              setTimeout(() => {
+                window.location.reload();
+              }, 2000);
+            } else {
+              showResultModal('danger', 'เกิดข้อผิดพลาด', data.message || 'ไม่สามารถอนุมัติการชำระเงินได้');
+            }
+          })
+          .catch(error => {
+            console.error('Error:', error);
+            showResultModal('danger', 'เกิดข้อผิดพลาด', 'เกิดข้อผิดพลาดในการเชื่อมต่อ');
+          });
+      }
+    });
+
+    // ปุ่มปฏิเสธการชำระเงิน
+    let selectedRejectOrderId = null;
+
+    $(".btn-reject").on("click", function (e) {
+      e.preventDefault();
+      selectedRejectOrderId = $(this).data("order-id");
+      $('#rejectPaymentModal').modal('show');
+    });
+
+    // ยืนยันการปฏิเสธจาก Modal
+    $("#confirmRejectBtn").on("click", function () {
+      if (selectedRejectOrderId) {
+        // ปิด modal และส่ง request
+        $('#rejectPaymentModal').modal('hide');
+        
+        fetch('/reject_payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ order_id: selectedRejectOrderId })
+        })
+          .then(response => response.json())
+          .then(data => {
+            if (data.success) {
+              showResultModal('success', 'สำเร็จ', 'ปฏิเสธการชำระเงินสำเร็จ');
+              setTimeout(() => {
+                window.location.reload();
+              }, 2000);
+            } else {
+              showResultModal('danger', 'เกิดข้อผิดพลาด', data.message || 'ไม่สามารถปฏิเสธการชำระเงินได้');
+            }
+          })
+          .catch(error => {
+            console.error('Error:', error);
+            showResultModal('danger', 'เกิดข้อผิดพลาด', 'เกิดข้อผิดพลาดในการเชื่อมต่อ');
+          });
+      }
+    });
+
+    // ฟังก์ชันแสดง Result Modal
+    function showResultModal(type, title, message) {
+      $('#resultModalLabel').text(title);
+      $('#resultModalBody').text(message);
+      $('#resultModalHeader').removeClass('bg-success bg-danger').addClass('bg-' + type + ' text-white');
+      $('#resultModal').modal('show');
+    }
   </script>
   
 

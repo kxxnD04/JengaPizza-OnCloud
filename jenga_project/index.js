@@ -1,9 +1,10 @@
+require('dotenv').config();
 const express = require("express");
 const multer = require("multer");
 const path = require("path");
-const port = 3000;
+const port = process.env.PORT || 3000;
 const bodyParser = require("body-parser");
-const sqlite3 = require('sqlite3').verbose();
+const db = require('./db'); // Import MySQL connection
 const session = require('express-session');
 const { log, error } = require("console");
 
@@ -20,20 +21,12 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage: storage });
 
-// Connect to SQLite database
-let db = new sqlite3.Database("data/pizzeria.db", (err) => {
-  if (err) {
-    return console.error(err.message);
-  }
-  console.log('Connected to the Pizzeria database.');
-});
-
 // Creating the Express server
 const app = express();
 
 // Session setup
 app.use(session({
-  secret: 'secret',
+  secret: process.env.SESSION_SECRET || 'secret',
   resave: true,
   saveUninitialized: true,
   cookie: {
@@ -67,79 +60,39 @@ app.get("/choose", (req, res) => {
 });
 
 app.post("/complete_order", upload.single("file"), async (req, res) => {
-  // if (!req.file) {
-  //   return res.status(400).json({ message: "No file uploaded" });
-  // }
-
-  try {
-    const pizza_ingredients_amount_query =
-      `SELECT pizza_ingredients.ingredient_id, SUM(quantity * quantity_required) as require, stock_quantity  FROM orders
-      JOIN order_items
-      USING (order_id)
-      JOIN pizza_ingredients
-      ON (item_id = pizza_id)
-      JOIN ingredients
-      ON (pizza_ingredients.ingredient_id = ingredients.ingredient_id)
-      WHERE order_status IS "pending" AND orders.user_id IS "${req.session.user_id}" AND item_type = "pizza" AND pizza_ingredients.ingredient_id > 20 AND pizza_ingredients.ingredient_id IS NOT 25
-      GROUP BY pizza_ingredients.ingredient_id
-      ORDER BY pizza_ingredients.ingredient_id`;
-
-    const etc_amount_query =
-      `SELECT etc_id, quantity, stock_quantity FROM orders
-      JOIN order_items
-      USING (order_id)
-      JOIN etc
-      ON (item_id = etc_id)
-      WHERE order_status IS "pending" AND orders.user_id IS "${req.session.user_id}" AND item_type = "etc"
-      ORDER BY etc_id`;
-
-    const ingredient_decrease_material = await new Promise((resolve, reject) => {
-      db.all(pizza_ingredients_amount_query, (error, rows) => (error ? reject(error) : resolve(rows)));
-    })
-
-    const etc_decrease_material = await new Promise((resolve, reject) => {
-      db.all(etc_amount_query, (error, rows) => (error ? reject(error) : resolve(rows)));
-    })
-
-    let decrease_query = "";
-
-    for (var i = 0; i < ingredient_decrease_material.length; i++) {
-      let new_ing_quan = Math.max(ingredient_decrease_material[i].stock_quantity - ingredient_decrease_material[i].require, 0)
-      decrease_query += `UPDATE ingredients SET stock_quantity = ${new_ing_quan} WHERE ingredient_id = ${ingredient_decrease_material[i].ingredient_id};\n`;
-    }
-
-    for (var i = 0; i < etc_decrease_material.length; i++) {
-      let new_etc_quan = Math.max(etc_decrease_material[i].stock_quantity - etc_decrease_material[i].quantity, 0)
-      decrease_query += `UPDATE etc SET stock_quantity = ${new_etc_quan} WHERE etc_id = ${etc_decrease_material[i].etc_id};\n`;
-    }
-
-    console.log(decrease_query);
-
-    const decreasing = await new Promise((resolve, reject) => {
-      db.exec(decrease_query, (error, rows) => (error ? reject(error) : resolve(rows)));
-    })
-
-    let payment_proof = "/uploads/" + req.file.filename;
-
-    const complete_query =
-      `UPDATE orders
-      SET payment_proof = "${payment_proof}", order_status = "preparing"
-      WHERE order_status IS "pending" AND user_id = "${req.session.user_id}"`;
-
-    const cart_complete = await new Promise((resolve, reject) => {
-      db.all(complete_query, (error, rows) => (error ? reject(error) : resolve(rows)));
-    })
-
-  } catch (error) {
-
+  if (!req.file) {
+    return res.status(400).json({ message: "กรุณาอัปโหลดหลักฐานการชำระเงิน" });
   }
 
-  res.json({
-    message: "File uploaded.",
-    filename: req.file.filename,
-    path: "/uploads/" + req.file.filename,
-    redirect: '/tracking'
-  });
+  try {
+    let payment_proof = "/uploads/" + req.file.filename;
+
+    // อัปเดต order ให้มีสลิปและเปลี่ยน status เป็น "pending" (รอ admin อนุมัติ)
+    const complete_query =
+      `UPDATE orders
+      SET payment_proof = ?, order_status = "pending"
+      WHERE order_status = "pending" AND user_id = ?`;
+
+    await new Promise((resolve, reject) => {
+      db.run(complete_query, [payment_proof, req.session.user_id], (error) => (error ? reject(error) : resolve()));
+    })
+
+    console.log("Payment proof uploaded, waiting for admin approval");
+
+    res.json({
+      message: "อัปโหลดหลักฐานการชำระเงินสำเร็จ รอการตรวจสอบจากทางร้าน",
+      filename: req.file.filename,
+      path: "/uploads/" + req.file.filename,
+      redirect: '/tracking'
+    });
+
+  } catch (error) {
+    console.error("Complete order error:", error);
+    res.status(500).json({ 
+      message: "เกิดข้อผิดพลาดในการอัปโหลด", 
+      redirect: '/qrpayment' 
+    });
+  }
 });
 
 app.get("/category", async (req, res) => {
@@ -148,56 +101,65 @@ app.get("/category", async (req, res) => {
   if (req.session.loggedin) {
     sql =
       `SELECT pizza_id, pizza_name, price FROM pizzas
-    LEFT JOIN (SELECT pizza_id, ingredient_id, SUM(quantity_required) AS require, stock_quantity FROM pizza_ingredients
+    LEFT JOIN (SELECT pizza_id, ingredient_id, SUM(quantity_required) AS \`require\`, stock_quantity FROM pizza_ingredients
     JOIN ingredients USING (ingredient_id)
     WHERE ingredient_id >= 21
     GROUP BY pizza_id, ingredient_id
-    HAVING require > stock_quantity
-    ) USING (pizza_id)
+    HAVING \`require\` > stock_quantity
+    ) AS subquery USING (pizza_id)
     LEFT JOIN (SELECT item_id FROM orders
     JOIN order_items USING (order_id)
-    WHERE item_type IS "pizza" AND user_id IS "${req.session.user_id}" AND order_status IS "pending")
-    ON item_id = pizza_id
-    WHERE ingredient_id is NULL AND (user_id = "${req.session.user_id}" OR user_id = 1) AND item_id IS NULL
+    WHERE item_type = "pizza" AND user_id = ? AND order_status = "pending")
+    AS cart ON item_id = pizza_id
+    WHERE ingredient_id IS NULL AND (user_id = ? OR user_id = 1) AND item_id IS NULL
     ORDER BY user_id`
 
     etc_query =
       `SELECT * FROM etc
     LEFT JOIN (SELECT item_id FROM orders
     JOIN order_items USING (order_id)
-    WHERE order_status IS "pending" AND item_type IS "etc" AND user_id IS "${req.session.user_id}")
-    ON item_id = etc_id
+    WHERE order_status = "pending" AND item_type = "etc" AND user_id = ?)
+    AS cart ON item_id = etc_id
     WHERE stock_quantity > 0 AND item_id IS NULL`
   } else {
     sql =
       `SELECT pizza_id, pizza_name, price FROM pizzas
-    LEFT JOIN (SELECT pizza_id, ingredient_id, SUM(quantity_required) AS require, stock_quantity FROM pizza_ingredients
+    LEFT JOIN (SELECT pizza_id, ingredient_id, SUM(quantity_required) AS \`require\`, stock_quantity FROM pizza_ingredients
     JOIN ingredients USING (ingredient_id)
     WHERE ingredient_id >= 21
     GROUP BY pizza_id, ingredient_id
-    HAVING require > stock_quantity
-    ) USING (pizza_id)
+    HAVING \`require\` > stock_quantity
+    ) AS subquery USING (pizza_id)
     LEFT JOIN (SELECT item_id FROM orders
     JOIN order_items USING (order_id)
-    WHERE item_type IS "pizza" AND user_id IS "1" AND order_status IS "pending")
-    ON item_id = pizza_id
-    WHERE ingredient_id is NULL AND user_id = 1 AND item_id IS NULL
+    WHERE item_type = "pizza" AND user_id = "1" AND order_status = "pending")
+    AS cart ON item_id = pizza_id
+    WHERE ingredient_id IS NULL AND user_id = 1 AND item_id IS NULL
     ORDER BY user_id`
 
     etc_query = "SELECT * FROM etc WHERE stock_quantity > 0";
   }
   let ingredient_query = `SELECT ingredient_id, ingredient_name, stock_quantity, thai_name FROM ingredients
-                          WHERE ingredient_name NOT LIKE "%\\_%" ESCAPE "\\" AND stock_quantity > 0;`
+                          WHERE ingredient_name NOT LIKE '%\\_%' AND stock_quantity > 0;`
   let pizza_results = "";
   let etc_results = "";
   let ingredient_results = "";
   try {
-    pizza_results = await new Promise((resolve, reject) => {
-      db.all(sql, (error, rows) => (error ? reject(error) : resolve(rows)));
-    })
-    etc_results = await new Promise((resolve, reject) => {
-      db.all(etc_query, (error, rows) => (error ? reject(error) : resolve(rows)));
-    })
+    if (req.session.loggedin) {
+      pizza_results = await new Promise((resolve, reject) => {
+        db.all(sql, [req.session.user_id, req.session.user_id], (error, rows) => (error ? reject(error) : resolve(rows)));
+      })
+      etc_results = await new Promise((resolve, reject) => {
+        db.all(etc_query, [req.session.user_id], (error, rows) => (error ? reject(error) : resolve(rows)));
+      })
+    } else {
+      pizza_results = await new Promise((resolve, reject) => {
+        db.all(sql, (error, rows) => (error ? reject(error) : resolve(rows)));
+      })
+      etc_results = await new Promise((resolve, reject) => {
+        db.all(etc_query, (error, rows) => (error ? reject(error) : resolve(rows)));
+      })
+    }
 
     ingredient_results = await new Promise((resolve, reject) => {
       db.all(ingredient_query, (error, rows) => (error ? reject(error) : resolve(rows)));
@@ -219,79 +181,148 @@ app.get("/category", async (req, res) => {
 });
 
 app.get("/pizza-:pizza_id", (req, res) => {
-  const pizza_id = req.params.pizza_id;
-  const sql = `SELECT pizza_id, pizza_name, thai_name, price FROM pizzas\
-              JOIN pizza_ingredients USING (pizza_id)\
-              JOIN ingredients USING (ingredient_id)\
-              WHERE pizza_id = ${pizza_id}\
-              ORDER BY ingredient_id;`;
+  const pizza_id = parseInt(req.params.pizza_id);
+  
+  // Validate pizza_id is a number
+  if (isNaN(pizza_id) || pizza_id <= 0) {
+    return res.render('pizza-name', { 
+      loggedin: req.session.loggedin, 
+      username: req.session.username || "", 
+      user_privilege: req.session.user_privilege || "", 
+      item: [{ pizza_name: 'ไม่พบข้อมูล', ingredient_name: 'ไม่พบข้อมูล' }] 
+    });
+  }
+  
+  // Use parameterized query
+  const sql = `SELECT pizza_id, pizza_name, thai_name, price FROM pizzas
+              JOIN pizza_ingredients USING (pizza_id)
+              JOIN ingredients USING (ingredient_id)
+              WHERE pizza_id = ?
+              ORDER BY ingredient_id`;
 
-  db.all(sql, (error, results) => {
+  db.all(sql, [pizza_id], (error, results) => {
     if (error) {
-      console.log(error.message);
-      res.render('pizza-name', { loggedin: req.session.loggedin, username: req.session.username || "", user_privilege: req.session.user_privilege || "", item: [{ pizza_name: 'เจ๊ง', ingredient_name: 'เจ๊ง' }] });
+      console.error("Pizza query error:", error.message);
+      res.render('pizza-name', { 
+        loggedin: req.session.loggedin, 
+        username: req.session.username || "", 
+        user_privilege: req.session.user_privilege || "", 
+        item: [{ pizza_name: 'เจ๊ง', ingredient_name: 'เจ๊ง' }] 
+      });
     } else {
-      res.render('pizza-name', { loggedin: req.session.loggedin, username: req.session.username || "", user_privilege: req.session.user_privilege || "", item: results });
+      res.render('pizza-name', { 
+        loggedin: req.session.loggedin, 
+        username: req.session.username || "", 
+        user_privilege: req.session.user_privilege || "", 
+        item: results 
+      });
     }
   });
 });
 
 app.get("/etc-:etc_id", (req, res) => {
-  const etc_id = req.params.etc_id;
-  const sql = `SELECT * FROM etc
-               WHERE etc_id = ${etc_id}`;
+  const etc_id = parseInt(req.params.etc_id);
+  
+  // Validate etc_id is a number
+  if (isNaN(etc_id) || etc_id <= 0) {
+    return res.render('etc-name', { 
+      loggedin: req.session.loggedin, 
+      username: req.session.username || "", 
+      user_privilege: req.session.user_privilege || "", 
+      item: [{ etc_name: 'ไม่พบข้อมูล', price: '0' }] 
+    });
+  }
+  
+  // Use parameterized query
+  const sql = `SELECT * FROM etc WHERE etc_id = ?`;
 
-  db.all(sql, (error, results) => {
+  db.all(sql, [etc_id], (error, results) => {
     if (error) {
-      console.log(error.message);
-      res.render('etc-name', { loggedin: req.session.loggedin, username: req.session.username || "", user_privilege: req.session.user_privilege || "", item: [{ etc_name: 'เจ๊ง', price: 'เจ๊ง' }] });
+      console.error("Etc query error:", error.message);
+      res.render('etc-name', { 
+        loggedin: req.session.loggedin, 
+        username: req.session.username || "", 
+        user_privilege: req.session.user_privilege || "", 
+        item: [{ etc_name: 'เจ๊ง', price: 'เจ๊ง' }] 
+      });
     } else {
-      res.render('etc-name', { loggedin: req.session.loggedin, username: req.session.username || "", user_privilege: req.session.user_privilege || "", item: results });
+      res.render('etc-name', { 
+        loggedin: req.session.loggedin, 
+        username: req.session.username || "", 
+        user_privilege: req.session.user_privilege || "", 
+        item: results 
+      });
     }
   });
 });
 
 app.post("/authen", async (req, res) => {
   const { username, password } = req.body;
-  const sql = `SELECT * FROM users WHERE (username = "${username}" OR user_email = "${username}") AND user_password = "${password}"`
-  db.all(sql, (error, results) => {
+  
+  // Input validation
+  if (!username || !password) {
+    return res.json({ success: false, message: "กรุณากรอกชื่อผู้ใช้และรหัสผ่าน" });
+  }
+  
+  // Use parameterized query to prevent SQL injection
+  const sql = `SELECT * FROM users WHERE (username = ? OR user_email = ?) AND user_password = ?`;
+  
+  db.all(sql, [username, username, password], (error, results) => {
     if (error) {
-      console.log(error.message);
+      console.error("Login error:", error.message);
+      return res.json({ success: false, message: "เกิดข้อผิดพลาดในระบบ" });
     }
+    
     if (results.length > 0) {
       req.session.loggedin = true;
       req.session.username = results[0].username;
       req.session.user_id = results[0].user_id;
       req.session.user_privilege = results[0].user_privilege;
-      console.log("logged in!");
+      console.log("User logged in:", results[0].username);
       return res.json({ success: true, redirect: '/home' });
     } else {
       return res.json({ success: false, message: "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง" });
     }
-  })
+  });
 });
 
 app.post("/newuser", async (req, res) => {
   const { username, email, password } = req.body;
-  const sql = `SELECT * FROM users WHERE username = "${username}" OR user_email = "${email}";`
-  db.all(sql, (error, results) => {
+  
+  // Input validation
+  if (!username || !email || !password) {
+    return res.json({ success: false, message: "กรุณากรอกข้อมูลให้ครบถ้วน" });
+  }
+  
+  if (password.length < 6) {
+    return res.json({ success: false, message: "รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร" });
+  }
+  
+  // Use parameterized query to prevent SQL injection
+  const check_sql = `SELECT * FROM users WHERE username = ? OR user_email = ?`;
+  
+  db.all(check_sql, [username, email], (error, results) => {
     if (error) {
-      console.log(error.message);
+      console.error("Registration check error:", error.message);
+      return res.json({ success: false, message: "เกิดข้อผิดพลาดในระบบ" });
     }
+    
     if (results.length > 0) {
       return res.json({ success: false, message: "ชื่อผู้ใช้หรืออีเมลนี้ถูกใช้ไปแล้ว" });
     } else {
-      try {
-        const insert_sql = `INSERT INTO users (username, user_email, user_password, user_privilege)
-                            VALUES ("${username}", "${email}", "${password}", "customer");`
-        db.run(insert_sql);
-      } catch (error) {
-        console.log(error);
-      }
-      console.log("User created!");
-      return res.json({ success: true, redirect: '/home' });
+      // Use parameterized query for insert
+      const insert_sql = `INSERT INTO users (username, user_email, user_password, user_privilege) VALUES (?, ?, ?, ?)`;
+      
+      db.run(insert_sql, [username, email, password, "customer"], function(error) {
+        if (error) {
+          console.error("Registration insert error:", error.message);
+          return res.json({ success: false, message: "เกิดข้อผิดพลาดในการสร้างบัญชี" });
+        }
+        console.log("User created:", username);
+        return res.json({ success: true, redirect: '/home' });
+      });
     }
-  })
+  });
 });
 
 app.get("/logout", (req, res) => {
@@ -318,28 +349,40 @@ app.get("/createform", (req, res) => {
 
 app.post("/create", async (req, res) => {
   const { pizza_name, dough, size, sauce, topping } = req.body;
-  const price = price_calc(dough, size, topping);
-  const sql = `INSERT INTO pizzas (pizza_name, price, user_id) VALUES ("${pizza_name}", ${price}, ${req.session.user_id})`
-  db.all(sql, (error, results) => {
-    if (error) {
-      console.log(error.message);
-    } else {
-      console.log("Pizza Created!");
-    }
-  });
-
-  topping_adder(`${dough}_${size}`, pizza_name);
-  topping_adder(sauce, pizza_name);
-  if (typeof (topping) == "string") {
-    topping_adder(topping, pizza_name);
-  } else {
-    topping.forEach((item) => {
-      topping_adder(item, pizza_name);
-    });
+  
+  // Input validation
+  if (!pizza_name || !dough || !size || !sauce) {
+    return res.status(400).send("ข้อมูลไม่ครบถ้วน");
   }
-
-  // res.send({ pizza_data: { pizza_name: pizza_name, dough: dough, size: size, sauce: sauce, topping: topping } });
-  res.redirect("/category");
+  
+  const price = price_calc(dough, size, topping);
+  
+  // Use parameterized query
+  const sql = `INSERT INTO pizzas (pizza_name, price, user_id) VALUES (?, ?, ?)`;
+  
+  db.run(sql, [pizza_name, price, req.session.user_id], function(error) {
+    if (error) {
+      console.error("Pizza creation error:", error.message);
+      return res.status(500).send("เกิดข้อผิดพลาดในการสร้างพิซซ่า");
+    }
+    
+    // Use insertId instead of lastID for MySQL
+    console.log("Pizza Created! ID:", this.insertId);
+    
+    // Add ingredients with the pizza_name
+    topping_adder(`${dough}_${size}`, pizza_name);
+    topping_adder(sauce, pizza_name);
+    
+    if (typeof (topping) == "string") {
+      topping_adder(topping, pizza_name);
+    } else if (Array.isArray(topping)) {
+      topping.forEach((item) => {
+        topping_adder(item, pizza_name);
+      });
+    }
+    
+    res.redirect("/category");
+  });
 });
 
 app.use('/uploads', express.static('uploads'));
@@ -349,11 +392,11 @@ app.get("/orderlist", async (req, res) => {
     return res.redirect('/home?nli=true');
   }
 
-  const sql = `SELECT order_id, item_id, item_type, quantity FROM orders JOIN order_items USING (order_id) WHERE user_id = ${req.session.user_id} AND order_status = "pending";`;
+  const sql = `SELECT order_id, item_id, item_type, quantity FROM orders JOIN order_items USING (order_id) WHERE user_id = ? AND order_status = "pending";`;
 
   try {
     const results = await new Promise((resolve, reject) => {
-      db.all(sql, (error, rows) => (error ? reject(error) : resolve(rows)));
+      db.all(sql, [req.session.user_id], (error, rows) => (error ? reject(error) : resolve(rows)));
     });
 
 
@@ -363,11 +406,11 @@ app.get("/orderlist", async (req, res) => {
                             FROM pizzas
                             JOIN pizza_ingredients USING (pizza_id)
                             JOIN ingredients USING (ingredient_id)
-                            WHERE pizza_id = ${item.item_id}
+                            WHERE pizza_id = ?
                             ORDER BY ingredient_id;`;
 
         const pizza = await new Promise((resolve, reject) => {
-          db.all(select_sql, (error, rows) => (error ? reject(error) : resolve(rows)));
+          db.all(select_sql, [item.item_id], (error, rows) => (error ? reject(error) : resolve(rows)));
         });
         pizza[0].order_id = item.order_id;
         pizza[0].quantity = item.quantity;
@@ -376,11 +419,11 @@ app.get("/orderlist", async (req, res) => {
       } else if (item.item_type === 'etc') {
         const select_sql = `SELECT etc_name, price, etc_id
                             FROM etc
-                            WHERE etc_id = ${item.item_id}
+                            WHERE etc_id = ?
                             ORDER BY etc_id;`;
 
         const pizza = await new Promise((resolve, reject) => {
-          db.all(select_sql, (error, rows) => (error ? reject(error) : resolve(rows)));
+          db.all(select_sql, [item.item_id], (error, rows) => (error ? reject(error) : resolve(rows)));
         });
         pizza[0].order_id = item.order_id;
         pizza[0].quantity = item.quantity;
@@ -408,14 +451,14 @@ app.get("/tracking", async (req, res) => {
     let order_results = "";
     try {
       let order_query =
-        `SELECT order_id, total_price, order_status, receiver_name, house_no, village_no, street, sub_district, district, province, postal_code, country FROM orders
+        `SELECT order_id, total_price, order_status, payment_proof, receiver_name, house_no, village_no, street, sub_district, district, province, postal_code, country FROM orders
         JOIN user_address
         USING (user_id)
-        WHERE user_id = "${req.session.user_id}" AND order_status IS NOT "pending"
+        WHERE user_id = ? AND payment_proof IS NOT NULL
         ORDER BY order_id DESC`
 
       order_results = await new Promise((resolve, reject) => {
-        db.all(order_query, (error, rows) => (error ? reject(error) : resolve(rows)));
+        db.all(order_query, [req.session.user_id], (error, rows) => (error ? reject(error) : resolve(rows)));
       })
 
     } catch (error) {
@@ -436,8 +479,15 @@ app.get("/tracking_seller", async (req, res) => {
         `SELECT order_id, user_id, total_price, order_status, payment_proof, receiver_name, house_no, village_no, street, sub_district, district, province, postal_code, country FROM orders
         JOIN user_address
         USING (user_id)
-        WHERE order_status IS NOT "pending"
-        ORDER BY order_id DESC`
+        WHERE payment_proof IS NOT NULL
+        ORDER BY 
+          CASE 
+            WHEN order_status = 'pending' THEN 1
+            WHEN order_status = 'preparing' THEN 2
+            WHEN order_status = 'delivering' THEN 3
+            ELSE 4
+          END,
+          order_id DESC`
 
       order_results = await new Promise((resolve, reject) => {
         db.all(order_query, (error, rows) => (error ? reject(error) : resolve(rows)));
@@ -455,7 +505,7 @@ app.get("/tracking_seller", async (req, res) => {
 
 app.get("/customerinfo", async (req, res) => {
   if (req.session.loggedin) {
-    const sql = `SELECT * FROM user_address WHERE user_id = ${req.session.user_id};`
+    const sql = `SELECT * FROM user_address WHERE user_id = ?;`
 
     let pizza_query =
       `SELECT quantity, pizza_name, order_id, address_id, item_type, item_id, price_per_unit, (price_per_unit * quantity) AS total FROM orders
@@ -463,7 +513,7 @@ app.get("/customerinfo", async (req, res) => {
     USING (order_id)
     JOIN pizzas
     ON item_id = pizza_id 
-    WHERE order_status IS "pending" AND orders.user_id = "${req.session.user_id}" AND item_type = "pizza"
+    WHERE order_status = "pending" AND orders.user_id = ? AND item_type = "pizza"
     ORDER BY pizza_id`;
 
     let etc_query =
@@ -472,7 +522,7 @@ app.get("/customerinfo", async (req, res) => {
     USING (order_id)
     JOIN etc
     ON item_id = etc_id 
-    WHERE order_status IS "pending" AND orders.user_id = "${req.session.user_id}" AND item_type = "etc"
+    WHERE order_status = "pending" AND orders.user_id = ? AND item_type = "etc"
     ORDER BY etc_id`;
 
     let sql_results = "";
@@ -481,24 +531,28 @@ app.get("/customerinfo", async (req, res) => {
 
     try {
       sql_results = await new Promise((resolve, reject) => {
-        db.all(sql, (error, result) => (error ? reject(error) : resolve(result)));
+        db.all(sql, [req.session.user_id], (error, result) => (error ? reject(error) : resolve(result)));
       })
 
       pizza_results = await new Promise((resolve, reject) => {
-        db.all(pizza_query, (error, result) => (error ? reject(error) : resolve(result)));
+        db.all(pizza_query, [req.session.user_id], (error, result) => (error ? reject(error) : resolve(result)));
       })
 
       etc_results = await new Promise((resolve, reject) => {
-        db.all(etc_query, (error, result) => (error ? reject(error) : resolve(result)));
+        db.all(etc_query, [req.session.user_id], (error, result) => (error ? reject(error) : resolve(result)));
       })
 
       let total_price = 0;
       for (var i = 0; i < pizza_results.length; i++) {
-        total_price += pizza_results[i].total;
+        total_price += parseFloat(pizza_results[i].total) || 0;
       }
       for (var i = 0; i < etc_results.length; i++) {
-        total_price += etc_results[i].total;
+        total_price += parseFloat(etc_results[i].total) || 0;
       }
+
+      // console.log("Calculated total_price:", total_price);
+      // console.log("Pizza results:", pizza_results);
+      // console.log("Etc results:", etc_results);
 
       if (sql_results.length > 0) {
 
@@ -545,41 +599,33 @@ app.post("/new_address", async (req, res) => {
     grand_price } = req.body;
   try {
     if (tag != "disabled") {
-      const sql = `INSERT INTO user_address (user_id, receiver_name,\
-    phone_no,\
-    house_no,\
-    village_no,\
-    street,\
-    sub_district,\
-    district,\
-    province,\
-    postal_code) VALUES (${req.session.user_id}, "${receiver_name}",
-  "${phone_no}",
-  "${house_no}",
-  "${village_no}",
-  "${street}",
-  "${sub_district}",
-  "${district}",
-  "${province}",
-  "${postal_code}")`
+      const sql = `INSERT INTO user_address (user_id, receiver_name,
+    phone_no,
+    house_no,
+    village_no,
+    street,
+    sub_district,
+    district,
+    province,
+    postal_code) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
       const insert_address = await new Promise((resolve, reject) => {
-        db.all(sql, (error, rows) => (error ? reject(error) : resolve(rows)));
+        db.run(sql, [req.session.user_id, receiver_name, phone_no, house_no, village_no, street, sub_district, district, province, postal_code], (error) => (error ? reject(error) : resolve()));
       })
       console.log("Address added!");
     }
 
     const testql = await new Promise((resolve, reject) => {
-      db.all(`SELECT address_id FROM user_address WHERE user_id = "${req.session.user_id}"`, (error, rows) => (error ? reject(error) : resolve(rows)));
+      db.all(`SELECT address_id FROM user_address WHERE user_id = ?`, [req.session.user_id], (error, rows) => (error ? reject(error) : resolve(rows)));
     })
 
     const update_query =
       `UPDATE orders
-    SET total_price = "${grand_price}", address_id = "${testql[0].address_id}"
-    WHERE order_status IS "pending" AND user_id = "${req.session.user_id}"`;
+    SET total_price = ?, address_id = ?
+    WHERE order_status = "pending" AND user_id = ?`;
 
     const update_total_price = await new Promise((resolve, reject) => {
-      db.all(update_query, (error, rows) => (error ? reject(error) : resolve(rows)));
+      db.run(update_query, [grand_price, testql[0].address_id, req.session.user_id], (error) => (error ? reject(error) : resolve()));
     })
 
 
@@ -595,11 +641,11 @@ app.get("/qrpayment", async (req, res) => {
 
     let order_query =
       `SELECT order_id, total_price FROM orders
-    WHERE order_status IS "pending" AND user_id = "${req.session.user_id}"`
+    WHERE order_status = "pending" AND user_id = ?`
 
     try {
       order_results = await new Promise((resolve, reject) => {
-        db.all(order_query, (error, rows) => (error ? reject(error) : resolve(rows)));
+        db.all(order_query, [req.session.user_id], (error, rows) => (error ? reject(error) : resolve(rows)));
       })
 
       res.render('qrpayment', { loggedin: req.session.loggedin, username: req.session.username || "", user_privilege: req.session.user_privilege || "", order_id: order_results[0].order_id, total_price: order_results[0].total_price });
@@ -617,7 +663,7 @@ app.get("/ingredients_seller", (req, res) => {
   if (req.session.user_privilege == "admin" || req.session.user_privilege == "employee") {
     // Get ingredients data
     const ingredientSql = `SELECT ingredient_id, ingredient_name, stock_quantity, thai_name, unit FROM ingredients
-                WHERE ingredient_name NOT LIKE "%\\_%" ESCAPE "\\";`;
+                WHERE ingredient_name NOT LIKE '%\\_%';`;
 
     // Get etc data
     const etcSql = `SELECT etc_id, etc_name, stock_quantity, price FROM etc;`;
@@ -730,8 +776,8 @@ app.post("/remove_orderitem", async (req, res) => {
   try {
     const remove =
       `DELETE FROM order_items
-     WHERE order_id IS "${order_id}" AND item_type IS "${type}" AND item_id IS "${item_id}";`
-    db.run(remove);
+     WHERE order_id = ? AND item_type = ? AND item_id = ?;`
+    db.run(remove, [order_id, type, item_id]);
     res.json({ message: "ส่งมาล้ะแต่", redirect: '/orderlist' });
   } catch (error) {
     res.json({ message: "ส่งมาล้ะแต่ Error", redirect: '/orderlist' });
@@ -743,23 +789,185 @@ app.post("/update_order", async (req, res) => {
   try {
     const update =
       `UPDATE orders
-     SET order_status = "${order_status}"
-     WHERE order_id IS "${order_id}";`
-    db.run(update);
+     SET order_status = ?
+     WHERE order_id = ?;`
+    db.run(update, [order_status, order_id]);
     res.json({ success: "true", redirect: '/tracking_seller' });
   } catch (error) {
     res.json({ success: "false", redirect: '/tracking_seller' });
   }
 })
 
+// Admin อนุมัติการชำระเงิน - ลด stock และเปลี่ยน status เป็น "preparing"
+app.post("/verify_payment", async (req, res) => {
+  const { order_id } = req.body;
+  
+  if (req.session.user_privilege !== "admin" && req.session.user_privilege !== "employee") {
+    return res.status(403).json({ success: false, message: "ไม่มีสิทธิ์เข้าถึง" });
+  }
+
+  try {
+    // ดึงข้อมูล order items
+    const pizza_ingredients_query =
+      `SELECT pizza_ingredients.ingredient_id, SUM(quantity * quantity_required) as \`require\`, stock_quantity  
+      FROM orders
+      JOIN order_items USING (order_id)
+      JOIN pizza_ingredients ON (item_id = pizza_id)
+      JOIN ingredients ON (pizza_ingredients.ingredient_id = ingredients.ingredient_id)
+      WHERE order_id = ? AND item_type = "pizza" AND pizza_ingredients.ingredient_id > 20 AND pizza_ingredients.ingredient_id != 25
+      GROUP BY pizza_ingredients.ingredient_id`;
+
+    const etc_query =
+      `SELECT etc_id, quantity, stock_quantity 
+      FROM orders
+      JOIN order_items USING (order_id)
+      JOIN etc ON (item_id = etc_id)
+      WHERE order_id = ? AND item_type = "etc"`;
+
+    const ingredient_data = await new Promise((resolve, reject) => {
+      db.all(pizza_ingredients_query, [order_id], (error, rows) => (error ? reject(error) : resolve(rows)));
+    });
+
+    const etc_data = await new Promise((resolve, reject) => {
+      db.all(etc_query, [order_id], (error, rows) => (error ? reject(error) : resolve(rows)));
+    });
+
+    // ตรวจสอบ stock เพียงพอหรือไม่
+    for (let item of ingredient_data) {
+      if (item.stock_quantity < item.require) {
+        return res.json({ 
+          success: false, 
+          message: `วัตถุดิบไม่เพียงพอ: ${item.ingredient_id}` 
+        });
+      }
+    }
+
+    for (let item of etc_data) {
+      if (item.stock_quantity < item.quantity) {
+        return res.json({ 
+          success: false, 
+          message: `สินค้าไม่เพียงพอ: ${item.etc_id}` 
+        });
+      }
+    }
+
+    // ลด stock
+    for (let item of ingredient_data) {
+      const new_quantity = item.stock_quantity - item.require;
+      await new Promise((resolve, reject) => {
+        db.run(
+          `UPDATE ingredients SET stock_quantity = ? WHERE ingredient_id = ?`,
+          [new_quantity, item.ingredient_id],
+          (error) => (error ? reject(error) : resolve())
+        );
+      });
+    }
+
+    for (let item of etc_data) {
+      const new_quantity = item.stock_quantity - item.quantity;
+      await new Promise((resolve, reject) => {
+        db.run(
+          `UPDATE etc SET stock_quantity = ? WHERE etc_id = ?`,
+          [new_quantity, item.etc_id],
+          (error) => (error ? reject(error) : resolve())
+        );
+      });
+    }
+
+    // อัปเดต order status เป็น "preparing"
+    await new Promise((resolve, reject) => {
+      db.run(
+        `UPDATE orders SET order_status = "preparing" WHERE order_id = ?`,
+        [order_id],
+        (error) => (error ? reject(error) : resolve())
+      );
+    });
+
+    console.log(`Order ${order_id} verified and stock decreased`);
+    res.json({ success: true, redirect: '/tracking_seller' });
+
+  } catch (error) {
+    console.error("Verify payment error:", error);
+    res.json({ success: false, message: "เกิดข้อผิดพลาด" });
+  }
+});
+
+// Admin ปฏิเสธการชำระเงิน - เปลี่ยน status เป็น "rejected"
+app.post("/reject_payment", async (req, res) => {
+  const { order_id, reason } = req.body;
+  
+  if (req.session.user_privilege !== "admin" && req.session.user_privilege !== "employee") {
+    return res.status(403).json({ success: false, message: "ไม่มีสิทธิ์เข้าถึง" });
+  }
+
+  try {
+    await new Promise((resolve, reject) => {
+      db.run(
+        `UPDATE orders SET order_status = "rejected" WHERE order_id = ?`,
+        [order_id],
+        (error) => (error ? reject(error) : resolve())
+      );
+    });
+
+    console.log(`Order ${order_id} rejected`);
+    res.json({ success: true, redirect: '/tracking_seller' });
+
+  } catch (error) {
+    console.error("Reject payment error:", error);
+    res.json({ success: false, message: "เกิดข้อผิดพลาด" });
+  }
+});
+
+// ลูกค้ายกเลิก Order (เฉพาะ status = "pending" ที่ยังไม่ถูก approve)
+app.post("/cancel_order", async (req, res) => {
+  const { order_id } = req.body;
+  
+  if (!req.session.loggedin) {
+    return res.status(403).json({ success: false, message: "กรุณาเข้าสู่ระบบ" });
+  }
+
+  try {
+    // ตรวจสอบว่า order นี้เป็นของ user และยังเป็น pending อยู่
+    const check_query = `SELECT order_id, order_status, user_id FROM orders WHERE order_id = ? AND user_id = ?`;
+    
+    const order = await new Promise((resolve, reject) => {
+      db.get(check_query, [order_id, req.session.user_id], (error, row) => (error ? reject(error) : resolve(row)));
+    });
+
+    if (!order) {
+      return res.json({ success: false, message: "ไม่พบคำสั่งซื้อ" });
+    }
+
+    if (order.order_status !== "pending") {
+      return res.json({ success: false, message: "ไม่สามารถยกเลิกคำสั่งซื้อนี้ได้ เนื่องจากทางร้านได้เริ่มดำเนินการแล้ว" });
+    }
+
+    // เปลี่ยน status เป็น "cancelled"
+    await new Promise((resolve, reject) => {
+      db.run(
+        `UPDATE orders SET order_status = "cancelled" WHERE order_id = ?`,
+        [order_id],
+        (error) => (error ? reject(error) : resolve())
+      );
+    });
+
+    console.log(`Order ${order_id} cancelled by customer`);
+    res.json({ success: true, message: "ยกเลิกคำสั่งซื้อสำเร็จ", redirect: '/tracking' });
+
+  } catch (error) {
+    console.error("Cancel order error:", error);
+    res.json({ success: false, message: "เกิดข้อผิดพลาด" });
+  }
+});
+
 app.post("/update_orderitem", async (req, res) => {
   const { order_id, item_id, type, value } = req.body;
   try {
     const update =
       `UPDATE order_items
-     SET quantity = "${value}"
-     WHERE order_id IS "${order_id}" AND item_type IS "${type}" AND item_id IS "${item_id}";`
-    db.run(update);
+     SET quantity = ?
+     WHERE order_id = ? AND item_type = ? AND item_id = ?;`
+    db.run(update, [value, order_id, type, item_id]);
     res.json({ message: "ส่งมาล้ะแต่" });
   } catch (error) {
     res.json({ message: "ส่งมาล้ะแต่ Error" });
@@ -769,35 +977,50 @@ app.post("/update_orderitem", async (req, res) => {
 app.post("/addtocart", async (req, res) => {
   if (req.session.loggedin) {
     const { item_id, item_type, item_price } = req.body;
+    
+    // Debug: Log incoming data
+    console.log("Received data:", { item_id, item_type, item_price });
 
     try {
       // Checking if there is a pending order yet, if not create one
       const init_order_status_checking_query =
         `SELECT order_status, order_id, user_id FROM orders
-        WHERE order_status IS "pending" AND user_id IS "${req.session.user_id}"`;
+        WHERE order_status = "pending" AND user_id = ?`;
       const init_order_status_checking_results = await new Promise((resolve, reject) => {
-        db.all(init_order_status_checking_query, (error, rows) => (error ? reject(error) : resolve(rows)));
+        db.all(init_order_status_checking_query, [req.session.user_id], (error, rows) => (error ? reject(error) : resolve(rows)));
       });
       if (init_order_status_checking_results.length == 0) {
         const init_the_order =
           `INSERT into orders (user_id)
-          VALUES (${req.session.user_id});`
+          VALUES (?)`;
         const init_order_res = await new Promise((resolve, reject) => {
-          db.run(init_the_order, (error, rows) => (error ? reject(error) : resolve(rows)));
+          db.run(init_the_order, [req.session.user_id], (error) => (error ? reject(error) : resolve()));
         });
         console.log("Cart created.");
       }
       const get_order_id_query =
         `SELECT order_id FROM orders
-       WHERE order_status IS "pending" AND user_id IS "${req.session.user_id}"`;
+       WHERE order_status = "pending" AND user_id = ?`;
       const order_id_curr = await new Promise((resolve, reject) => {
-        db.all(get_order_id_query, (error, rows) => (error ? reject(error) : resolve(rows)));
+        db.all(get_order_id_query, [req.session.user_id], (error, rows) => (error ? reject(error) : resolve(rows)));
       });
 
-      const query_for_add = `INSERT INTO order_items
-                             VALUES ("${order_id_curr[0].order_id}", "${item_type}", "${item_id}", 1, "${item_price}")`;
+      // Clean the price value - remove quotes and parse as number
+      let cleanPrice = parseFloat(item_price);
+      
+      // Validate price - if NaN or invalid, throw error
+      if (isNaN(cleanPrice) || cleanPrice < 0) {
+        console.error("Invalid price:", item_price);
+        throw new Error("Invalid price value");
+      }
+      
+      // Parse item_id as integer
+      const cleanItemId = parseInt(item_id);
+      
+      const query_for_add = `INSERT INTO order_items (order_id, item_type, item_id, quantity, price_per_unit)
+                             VALUES (?, ?, ?, 1, ?)`;
       const adding = await new Promise((resolve, reject) => {
-        db.run(query_for_add, (error, rows) => (error ? reject(error) : resolve(rows)));
+        db.run(query_for_add, [order_id_curr[0].order_id, item_type, cleanItemId, cleanPrice], (error) => (error ? reject(error) : resolve()));
       });
       console.log("Order Added to cart.");
 
@@ -854,20 +1077,23 @@ let price_calc = (dough, size, topping) => {
 };
 
 let topping_adder = (topping, pizza_name) => {
-  var quantity = 50
+  var quantity = 50;
   if (topping.search("sauce") != -1) {
     quantity = 250;
   } else if (topping.search("crust") != -1 || topping.search("original") != -1 || topping.search("crispy") != -1) {
     quantity = 1;
   }
+  
+  // Use parameterized query with subqueries
   const sql2 = `INSERT INTO pizza_ingredients (pizza_id, ingredient_id, quantity_required)
-SELECT 
-    (SELECT pizza_id FROM pizzas WHERE pizza_name = "${pizza_name}") AS pizza_id,
-    (SELECT ingredient_id FROM ingredients WHERE ingredient_name = "${topping}") AS ingredient_id,
-    ${quantity} AS quantity_required;`
-  db.all(sql2, (error, results2) => {
+    SELECT 
+      (SELECT pizza_id FROM pizzas WHERE pizza_name = ? LIMIT 1) AS pizza_id,
+      (SELECT ingredient_id FROM ingredients WHERE ingredient_name = ? LIMIT 1) AS ingredient_id,
+      ? AS quantity_required`;
+  
+  db.run(sql2, [pizza_name, topping, quantity], function(error) {
     if (error) {
-      console.log(error.message);
+      console.error("Topping add error:", error.message);
     }
-  })
+  });
 };

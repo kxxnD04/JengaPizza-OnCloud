@@ -4,6 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🍕</text></svg>">
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"></script>
@@ -125,8 +126,8 @@
                                     <tr>
                                         <th scope="row"><%= pizza_item[i].quantity %></th>
                                         <td><%= pizza_item[i].pizza_name %></td>
-                                        <td><%= pizza_item[i].price_per_unit %>.00</td>
-                                        <td><%= pizza_item[i].total %>.00</td>
+                                        <td><%= pizza_item[i].price_per_unit %></td>
+                                        <td><%= pizza_item[i].total %></td>
                                     </tr>
 
                                 <% } %>
@@ -136,14 +137,14 @@
                                     <tr>
                                         <th scope="row"><%= etc_item[i].quantity %></th>
                                         <td><%= etc_item[i].etc_name %></td>
-                                        <td><%= etc_item[i].price_per_unit %>.00</td>
-                                        <td><%= etc_item[i].total %>.00</td>
+                                        <td><%= etc_item[i].price_per_unit %></td>
+                                        <td><%= etc_item[i].total %></td>
                                     </tr>
 
                                 <% } %>
                             </tbody>
                         </table>
-                        <div class="invoice-total">ยอดรวม: <%= grand_price %>.00 บาท</div>
+                        <div class="invoice-total">ยอดรวม: <%= parseFloat(grand_price).toFixed(2) %> บาท</div>
                     </div>
                 </div>
                 <div class="col-md-6" style="text-align: left;">

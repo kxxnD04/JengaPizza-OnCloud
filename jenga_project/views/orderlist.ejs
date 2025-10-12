@@ -4,6 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🍕</text></svg>">
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"></script>
@@ -165,9 +166,16 @@
             <div class="row">
                 <% for(var i=0; i < menu.length; i++) { %>
                     <% if(menu[i].type=="pizza" ){ %>
+                        <% 
+                        // For custom pizzas (id >= 10), use a random image from pizza4-9
+                        let pizzaImageId = menu[i].pizza_id;
+                        if (menu[i].pizza_id >= 10) {
+                            pizzaImageId = Math.floor(pizzaImageId % 6) + 4; // ใช้รูป 4-9 ขึ้นอยู่กับ pizzaImageId 10, 11, 12, ...
+                        }
+                        %>
                         <div id="<%= menu[i].order_id %> <%= menu[i].pizza_id %> <%= menu[i].type %>" class="col-md-6">
                             <div class="card p-3">
-                                <img src="images/pizza<%= menu[i].pizza_id %>.png" alt="<%= menu[i].pizza_name %>">
+                                <img src="images/pizza<%= pizzaImageId %>.png" alt="<%= menu[i].pizza_name %>">
                                 <p style="font-size: 26px; color: rgb(187, 62, 0);">
                                     <%= menu[i].pizza_name %>
                                 </p>

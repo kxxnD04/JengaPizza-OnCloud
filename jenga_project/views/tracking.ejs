@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🍕</text></svg>">
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"></script>
@@ -92,16 +93,30 @@
 
                             <div class="row align-items-center p-3 border rounded bg-white shadow-sm mb-3">
                                 <div class="col-2">
-                                    <img src="images/<%= order[i].order_status %>.png" class="order-icon">
+                                    <% 
+                                        let statusImage = order[i].order_status;
+                                        if (order[i].order_status === 'cancelled' || order[i].order_status === 'rejected') {
+                                            statusImage = 'cancelled';
+                                        }
+                                    %>
+                                    <img src="images/<%= statusImage %>.png" class="order-icon">
                                 </div>
                                 <div class="col-6">
-                                    <h5>Order No. <%= order[i].order_id %></h5>
-                                    <p class="text-muted">ราคา : <%= order[i].total_price %>.00 บาท</p>
+                                    <h5 id="order-<%= order[i].order_id %>">Order No. <%= order[i].order_id %></h5>
+                                    <p class="text-muted">ราคา : <%= order[i].total_price %> บาท</p>
                                     <p class="text-muted">รายละเอียด : <%= order[i].receiver_name %>, <%= order[i].house_no %> <%= order[i].village_no %> <%= order[i].street %> <%= order[i].sub_district %> <%= order[i].district %> <%= order[i].province %> <%= order[i].postal_code %> <%= order[i].country %></p>
                                     <p class="text-muted timestamp">อัพเดทเมื่อ : </p>
                                 </div>
                                 <div class="col-4 text-right">
                                     <span class="status <%= order[i].order_status %>"> <%= order[i].order_status %> </span>
+                                    
+                                    <% if (order[i].order_status === 'pending') { %>
+                                        <div class="mt-3">
+                                            <button class="btn btn-danger btn-cancel-order" data-order-id="<%= order[i].order_id %>">
+                                                ยกเลิกคำสั่งซื้อ
+                                            </button>
+                                        </div>
+                                    <% } %>
                                 </div>
                             </div>
 
@@ -112,6 +127,48 @@
             </div>
         </div>
     </div>
+
+    <!-- Modal สำหรับยืนยันการยกเลิกคำสั่งซื้อ -->
+    <div class="modal fade" id="cancelOrderModal" role="dialog" aria-labelledby="cancelOrderModalLabel">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title" id="cancelOrderModalLabel">ยืนยันการยกเลิกคำสั่งซื้อ</h5>
+                    <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <p>คุณแน่ใจหรือไม่ที่จะยกเลิกคำสั่งซื้อนี้?</p>
+                    <p class="text-muted">คำสั่งซื้อที่ยกเลิกแล้วจะไม่สามารถกู้คืนได้</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-danger" id="confirmCancelBtn">ยืนยันการยกเลิก</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal สำหรับแสดงผลลัพธ์ -->
+    <div class="modal fade" id="resultModal" role="dialog" aria-labelledby="resultModalLabel">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content">
+                <div class="modal-header" id="resultModalHeader">
+                    <h5 class="modal-title" id="resultModalLabel">ผลลัพธ์</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body" id="resultModalBody">
+                    <!-- Message will be inserted here -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" data-dismiss="modal">ตกลง</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         function getCurrentDateTime() {
             const now = new Date();
@@ -138,6 +195,78 @@
             $(`select[data-order-id="${orderId}"]`).closest('.row').find('p.text-muted:last').text('อัพเดทเมื่อ : ' + getCurrentDateTime());
 
         });
+
+        // ปุ่มยกเลิกคำสั่งซื้อ
+        let selectedOrderId = null;
+
+        $(".btn-cancel-order").on("click", function (e) {
+            e.preventDefault();
+            selectedOrderId = $(this).data("order-id");
+            $('#cancelOrderModal').modal('show');
+        });
+
+        // จัดการการปิด Modal (ปุ่ม X)
+        $('#cancelOrderModal').on('hidden.bs.modal', function () {
+            selectedOrderId = null;
+        });
+
+        // จัดการปุ่มกากบาท (X) ให้ปิด Modal ได้
+        $('#cancelOrderModal .close').on('click', function() {
+            $('#cancelOrderModal').modal('hide');
+        });
+
+        $('#resultModal .close').on('click', function() {
+            $('#resultModal').modal('hide');
+        });
+
+        // ปิด Modal เมื่อคลิกนอก Modal
+        $(document).on('click', '.modal', function(e) {
+            if ($(e.target).hasClass('modal')) {
+                $(this).modal('hide');
+            }
+        });
+
+        $('#resultModal').on('hidden.bs.modal', function () {
+            // Reset modal header class
+            $('#resultModalHeader').removeClass('bg-success bg-danger text-white');
+        });
+
+        // ยืนยันการยกเลิกจาก Modal
+        $("#confirmCancelBtn").on("click", function () {
+            if (selectedOrderId) {
+                // ปิด modal และแสดง loading
+                $('#cancelOrderModal').modal('hide');
+                
+                fetch('/cancel_order', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ order_id: selectedOrderId })
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            showResultModal('success', 'สำเร็จ', data.message || 'ยกเลิกคำสั่งซื้อสำเร็จ');
+                            setTimeout(() => {
+                                window.location.reload();
+                            }, 2000);
+                        } else {
+                            showResultModal('danger', 'เกิดข้อผิดพลาด', data.message || 'ไม่สามารถยกเลิกคำสั่งซื้อได้');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        showResultModal('danger', 'เกิดข้อผิดพลาด', 'เกิดข้อผิดพลาดในการเชื่อมต่อ');
+                    });
+            }
+        });
+
+        // ฟังก์ชันแสดง Result Modal
+        function showResultModal(type, title, message) {
+            $('#resultModalLabel').text(title);
+            $('#resultModalBody').text(message);
+            $('#resultModalHeader').removeClass('bg-success bg-danger').addClass('bg-' + type + ' text-white');
+            $('#resultModal').modal('show');
+        }
     </script>
     <footer>
         <%- include('footer') %>

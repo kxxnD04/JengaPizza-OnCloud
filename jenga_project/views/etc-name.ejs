@@ -4,6 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🍕</text></svg>">
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"></script>
@@ -135,7 +136,7 @@
                         <img src="images\etc<%= item[0].etc_id %>.png" alt="พิซซ่า">
                         <p id="price"
                             style="text-align: center; font-size: 20px; font-weight: bolder; color: rgb(187, 62, 0);">
-                            <%= item[0].price %>.00 บาท
+                            <%= item[0].price %> บาท
                         </p>
                     </div>
                 </div>
@@ -196,8 +197,8 @@
     </footer>
 
     <script>
-        let id = "<%= JSON.stringify(item[0].etc_id) %>";
-        let price = "<%= JSON.stringify(item[0].price) %>";
+        let id = <%= item[0].etc_id %>;
+        let price = <%= item[0].price %>;
         document.getElementById("addtocartBtn").addEventListener("click", function () {
             fetch('/addtocart', {  // Route in Express
                 method: 'POST',
