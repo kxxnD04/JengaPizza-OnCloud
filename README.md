@@ -1,12 +1,12 @@
-# Welcome to our small indie project!
+# Welcome to our small indie project! (Upgrade version of JengaPizza)
 
-# JengaPizza
-Fundamental Webprogramming ITKMITL Project
+# JengaPizza On Cloud
+From Fundamental Webprogramming To Cloud Computing ITKMITL Project
 
 # How to use?
 just run auto_install.bat
 
-# Members of group 27
+# Members of group
 |ID|Username|Name-Surname|
 |--|--------|------------|
 |66070014|[KxxnD04](https://github.com/kxxnD04)|กานต์ สุดดี|

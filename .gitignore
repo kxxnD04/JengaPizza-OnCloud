@@ -1,2 +1,4 @@
 jenga_project/node_modules
 jenga_project/node_modules/*
+jenga_project/.env
+jenga_project/uploads
