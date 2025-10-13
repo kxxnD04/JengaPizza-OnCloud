@@ -68,6 +68,93 @@
             width: 100%;
             cursor: pointer;
         }
+
+        /* Filter Section Styles */
+        .filter-container {
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .filter-title {
+            font-weight: bold;
+            color: rgb(187, 62, 0);
+            margin-bottom: 15px;
+            font-size: 1.1rem;
+        }
+
+        .filter-controls {
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+        }
+
+        .filter-group {
+            flex: 1;
+        }
+
+        .filter-label {
+            font-size: 0.9rem;
+            color: #6c757d;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+
+        .filter-input, .filter-select {
+            width: 100%;
+            padding: 8px 12px;
+            border: 2px solid #e9ecef;
+            border-radius: 6px;
+            font-family: Prompt;
+            transition: border-color 0.3s;
+        }
+
+        .filter-input:focus, .filter-select:focus {
+            outline: none;
+            border-color: rgb(187, 62, 0);
+        }
+
+        .btn-filter {
+            background-color: rgb(187, 62, 0);
+            color: white;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-family: Prompt;
+            transition: background-color 0.3s;
+        }
+
+        .btn-filter:hover {
+            background-color: rgb(160, 50, 0);
+        }
+
+        .btn-reset {
+            background-color: #6c757d;
+            color: white;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-family: Prompt;
+            transition: background-color 0.3s;
+        }
+
+        .btn-reset:hover {
+            background-color: #5a6268;
+        }
+
+        @media (max-width: 768px) {
+            .filter-controls {
+                flex-direction: column;
+            }
+            
+            .filter-group {
+                width: 100%;
+            }
+        }
     </style>
 </head>
 
@@ -81,14 +168,46 @@
     <div class="container-center">
         <div class="container mt-4">
             <h2 class="font-weight-bold">ติดตามสถานะสินค้า</h2>
+
+            <!-- Filter Section -->
+            <div class="filter-container">
+                <div class="filter-title">🔍 กรองและค้นหา</div>
+                <div class="filter-controls">
+                    <div class="filter-group">
+                        <div class="filter-label">ค้นหา Order ID</div>
+                        <input type="number" id="searchOrderId" class="filter-input" placeholder="ใส่หมายเลข Order...">
+                    </div>
+                    <div class="filter-group">
+                        <div class="filter-label">กรองตามสถานะ</div>
+                        <select id="filterStatus" class="filter-select">
+                            <option value="all">ทั้งหมด</option>
+                            <option value="pending">รอการอนุมัติ (pending)</option>
+                            <option value="preparing">กำลังเตรียม (preparing)</option>
+                            <option value="delivering">กำลังจัดส่ง (delivering)</option>
+                            <option value="success">สำเร็จแล้ว (success)</option>
+                            <option value="cancelled">ยกเลิกแล้ว (cancelled)</option>
+                            <option value="rejected">ปฏิเสธแล้ว (rejected)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <button class="btn-filter" onclick="applyFilter()">ค้นหา</button>
+                    </div>
+                    <div>
+                        <button class="btn-reset" onclick="resetFilter()">รีเซ็ต</button>
+                    </div>
+                </div>
+            </div>
+
             <div class="row">
                 <!-- Order List -->
                 <div class="col-md-12">
-                    <div class="order-card">
+                    <div class="order-card" id="orderList">
 
                         <% for(var i=0; i < allder.length; i++) { %>
 
-                            <div class="row align-items-center p-3 border rounded bg-white shadow-sm mb-3">
+                            <div class="row align-items-center p-3 border rounded bg-white shadow-sm mb-3 order-item" 
+                                 data-order-id="<%= allder[i].order_id %>" 
+                                 data-order-status="<%= allder[i].order_status %>">
                                 <div class="col-2">
                                     <% 
                                         let statusImage = allder[i].order_status;
@@ -238,6 +357,67 @@
             let orderId = $(this).data('order-id');
             $(`select[data-order-id="${orderId}"]`).closest('.row').find('p.text-muted:last').text('อัพเดทเมื่อ : ' + getCurrentDateTime());
 
+        });
+
+        // Filter and Search Functions
+        function applyFilter() {
+            const searchId = $('#searchOrderId').val().trim();
+            const filterStatus = $('#filterStatus').val();
+
+            $('.order-item').each(function() {
+                const orderId = $(this).data('order-id').toString();
+                const orderStatus = $(this).data('order-status');
+                
+                let showOrder = true;
+
+                // Filter by Order ID
+                if (searchId !== '' && orderId !== searchId) {
+                    showOrder = false;
+                }
+
+                // Filter by Status
+                if (filterStatus !== 'all' && orderStatus !== filterStatus) {
+                    showOrder = false;
+                }
+
+                if (showOrder) {
+                    $(this).show();
+                } else {
+                    $(this).hide();
+                }
+            });
+
+            // Show message if no orders found
+            checkEmptyResults();
+        }
+
+        function resetFilter() {
+            $('#searchOrderId').val('');
+            $('#filterStatus').val('all');
+            $('.order-item').show();
+            $('#noResultsMessage').remove();
+        }
+
+        function checkEmptyResults() {
+            const visibleOrders = $('.order-item:visible').length;
+            
+            $('#noResultsMessage').remove();
+            
+            if (visibleOrders === 0) {
+                $('#orderList').append(
+                    '<div id="noResultsMessage" class="text-center p-5">' +
+                    '<div style="font-size: 3rem; opacity: 0.3;">📭</div>' +
+                    '<p style="color: #6c757d; margin-top: 15px;">ไม่พบคำสั่งซื้อที่ตรงกับเงื่อนไขการค้นหา</p>' +
+                    '</div>'
+                );
+            }
+        }
+
+        // Enable Enter key for search
+        $('#searchOrderId').on('keypress', function(e) {
+            if (e.which === 13) {
+                applyFilter();
+            }
         });
     </script>
 

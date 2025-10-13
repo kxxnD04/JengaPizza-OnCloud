@@ -1043,6 +1043,169 @@ app.get("/faq", (req, res) => {
   res.render('faq', { loggedin: req.session.loggedin, username: req.session.username || "", user_privilege: req.session.user_privilege || "" });
 });
 
+app.get("/dashboard", async (req, res) => {
+  // Check if user is admin or employee
+  if (!req.session.loggedin || (req.session.user_privilege !== "admin" && req.session.user_privilege !== "employee")) {
+    return res.redirect('/home?nli=true');
+  }
+
+  try {
+    // 1. Summary Statistics
+    const totalOrdersQuery = `SELECT COUNT(*) as total FROM orders WHERE payment_proof IS NOT NULL`;
+    const totalRevenueQuery = `SELECT IFNULL(SUM(total_price), 0) as revenue FROM orders WHERE payment_proof IS NOT NULL AND order_status = 'success'`;
+    const totalCustomersQuery = `SELECT COUNT(*) as total FROM users WHERE user_privilege = 'customer'`;
+    const topPizzaQuery = `
+      SELECT p.pizza_id, p.pizza_name, SUM(oi.quantity) as total_sold, IFNULL(SUM(oi.quantity * oi.price_per_unit), 0) as total_revenue
+      FROM order_items oi
+      JOIN orders o ON oi.order_id = o.order_id
+      JOIN pizzas p ON oi.item_id = p.pizza_id
+      WHERE oi.item_type = 'pizza' AND o.order_status = 'success'
+      GROUP BY oi.item_id, p.pizza_id, p.pizza_name
+      ORDER BY total_sold DESC
+      LIMIT 1`;
+    
+    // 1.1 Today's Revenue (for progress bar)
+    const todayRevenueQuery = `SELECT IFNULL(SUM(total_price), 0) as revenue FROM orders WHERE order_status = 'success' AND DATE(order_date) = CURDATE()`;
+
+    // 2. Order Status Breakdown - Show ALL statuses
+    const statusBreakdownQuery = `
+      SELECT order_status, COUNT(*) as count 
+      FROM orders 
+      WHERE payment_proof IS NOT NULL
+      GROUP BY order_status`;
+
+    // 3. Best Selling Items (TOP 5)
+    const bestSellingQuery = `
+      SELECT 
+        CASE 
+          WHEN item_type = 'pizza' THEN (SELECT pizza_name FROM pizzas WHERE pizza_id = item_id)
+          WHEN item_type = 'etc' THEN (SELECT etc_name FROM etc WHERE etc_id = item_id)
+        END as item_name,
+        item_type,
+        SUM(quantity) as total_sold
+      FROM order_items
+      JOIN orders USING (order_id)
+      WHERE order_status = 'success'
+      GROUP BY item_type, item_id
+      ORDER BY total_sold DESC
+      LIMIT 5`;
+
+    // 4. Low Stock Alert (TOP 3 for each category)
+    const lowStockIngredientsQuery = `
+      SELECT ingredient_name, thai_name, stock_quantity, unit 
+      FROM ingredients 
+      WHERE ingredient_name NOT LIKE '%\\_%'
+      ORDER BY stock_quantity ASC
+      LIMIT 3`;
+
+    const lowStockEtcQuery = `
+      SELECT etc_name, stock_quantity, 'ชิ้น' as unit
+      FROM etc 
+      ORDER BY stock_quantity ASC
+      LIMIT 3`;
+
+    // 5. Recent Orders
+    const recentOrdersQuery = `
+      SELECT o.order_id, u.username, o.total_price, o.order_status, o.order_date
+      FROM orders o
+      JOIN users u ON o.user_id = u.user_id
+      WHERE o.payment_proof IS NOT NULL
+      ORDER BY o.order_date DESC
+      LIMIT 5`;
+
+    // Execute all queries
+    const [totalOrders] = await new Promise((resolve, reject) => {
+      db.all(totalOrdersQuery, (error, rows) => (error ? reject(error) : resolve(rows)));
+    });
+
+    const [totalRevenue] = await new Promise((resolve, reject) => {
+      db.all(totalRevenueQuery, (error, rows) => (error ? reject(error) : resolve(rows)));
+    });
+
+    const [totalCustomers] = await new Promise((resolve, reject) => {
+      db.all(totalCustomersQuery, (error, rows) => (error ? reject(error) : resolve(rows)));
+    });
+
+    const topPizza = await new Promise((resolve, reject) => {
+      db.all(topPizzaQuery, (error, rows) => (error ? reject(error) : resolve(rows)));
+    });
+
+    const [todayRevenue] = await new Promise((resolve, reject) => {
+      db.all(todayRevenueQuery, (error, rows) => (error ? reject(error) : resolve(rows)));
+    });
+
+    const statusBreakdown = await new Promise((resolve, reject) => {
+      db.all(statusBreakdownQuery, (error, rows) => (error ? reject(error) : resolve(rows)));
+    });
+
+    const bestSelling = await new Promise((resolve, reject) => {
+      db.all(bestSellingQuery, (error, rows) => (error ? reject(error) : resolve(rows)));
+    });
+
+    const lowStockIngredients = await new Promise((resolve, reject) => {
+      db.all(lowStockIngredientsQuery, (error, rows) => (error ? reject(error) : resolve(rows)));
+    });
+
+    const lowStockEtc = await new Promise((resolve, reject) => {
+      db.all(lowStockEtcQuery, (error, rows) => (error ? reject(error) : resolve(rows)));
+    });
+
+    const recentOrders = await new Promise((resolve, reject) => {
+      db.all(recentOrdersQuery, (error, rows) => (error ? reject(error) : resolve(rows)));
+    });
+
+    // Daily goal (can be adjusted - default 5000 baht)
+    const dailyGoal = 5000;
+
+    // Create complete status breakdown with all 6 statuses
+    const allStatuses = ['pending', 'preparing', 'delivering', 'success', 'cancelled', 'rejected'];
+    const statusMap = {};
+    statusBreakdown.forEach(status => {
+      statusMap[status.order_status] = status.count;
+    });
+    
+    const completeStatusBreakdown = allStatuses.map(status => ({
+      order_status: status,
+      count: statusMap[status] || 0
+    }));
+
+    // Keep ingredients and etc separate (don't combine)
+    res.render('dashboard', {
+      loggedin: req.session.loggedin,
+      username: req.session.username,
+      user_privilege: req.session.user_privilege || "",
+      stats: {
+        totalOrders: totalOrders.total || 0,
+        totalRevenue: totalRevenue.revenue || 0,
+        totalCustomers: totalCustomers.total || 0,
+        topPizza: topPizza.length > 0 ? topPizza[0] : null,
+        todayRevenue: todayRevenue.revenue || 0,
+        dailyGoal: dailyGoal
+      },
+      statusBreakdown: completeStatusBreakdown || [],
+      bestSelling: bestSelling || [],
+      lowStockIngredients: lowStockIngredients || [],
+      lowStockEtc: lowStockEtc || [],
+      recentOrders: recentOrders || []
+    });
+
+  } catch (error) {
+    console.error("Dashboard error:", error);
+    res.render('dashboard', {
+      loggedin: req.session.loggedin,
+      username: req.session.username,
+      user_privilege: req.session.user_privilege || "",
+      stats: { totalOrders: 0, totalRevenue: 0, totalCustomers: 0, topPizza: null, todayRevenue: 0, dailyGoal: 5000 },
+      statusBreakdown: [],
+      bestSelling: [],
+      lowStockIngredients: [],
+      lowStockEtc: [],
+      recentOrders: [],
+      error: "เกิดข้อผิดพลาดในการโหลดข้อมูล"
+    });
+  }
+});
+
 app.all('*', (req, res) => {
   res.render('404', { loggedin: req.session.loggedin, username: req.session.username || "", user_privilege: req.session.user_privilege || "" })
 });

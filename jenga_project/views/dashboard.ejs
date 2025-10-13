@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🍕</text></svg>">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script>
+    <title>Dashboard - Jenga Pizza</title>
+    <style>
+        @font-face {
+            font-family: Prompt;
+            src: url("fonts/Prompt-Regular.ttf");
+        }
+
+        body {
+            font-family: Prompt;
+            background-color: #f8f9fa;
+        }
+
+        /* Background Image */
+        body::before {
+            content: "";
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            background-image: url("images/bg-pizza.jpg");
+            opacity: 0.05;
+            z-index: -1;
+        }
+
+        .dashboard-container {
+            padding: 80px 20px 40px 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .page-title {
+            font-size: 2rem;
+            font-weight: bold;
+            color: rgb(187, 62, 0);
+            margin-bottom: 30px;
+        }
+
+        /* Summary Cards */
+        .stat-card {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: transform 0.3s, box-shadow 0.3s;
+            margin-bottom: 20px;
+            border-left: 4px solid rgb(187, 62, 0);
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 16px rgba(187, 62, 0, 0.2);
+        }
+
+        .stat-icon {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: rgb(187, 62, 0);
+            margin: 10px 0;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            color: #6c757d;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Top Pizza Card Specific Styles */
+        .pizza-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .pizza-icon {
+            font-size: 2.5rem;
+        }
+
+        .pizza-image {
+            width: 60px;
+            height: 60px;
+            object-fit: cover;
+            border-radius: 50%;
+            border: 3px solid rgb(187, 62, 0);
+            box-shadow: 0 2px 8px rgba(187, 62, 0, 0.3);
+        }
+
+        .pizza-name {
+            font-size: 2rem;
+            font-weight: bold;
+            color: rgb(187, 62, 0);
+            margin: 10px 0;
+            line-height: 1.2;
+            text-align: left;
+        }
+
+        .pizza-stats {
+            font-size: 0.9rem;
+            color: #6c757d;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            text-align: left;
+        }
+
+        /* Section Cards */
+        .section-card {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 25px;
+            height: 100%;
+        }
+
+        .section-title {
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: rgb(187, 62, 0);
+            margin-bottom: 20px;
+            border-bottom: 2px solid rgb(187, 62, 0);
+            padding-bottom: 10px;
+        }
+
+        .section-subtitle {
+            font-size: 1rem;
+            font-weight: bold;
+            color: #6c757d;
+            margin-top: 20px;
+            margin-bottom: 15px;
+            padding-left: 10px;
+            border-left: 3px solid rgb(187, 62, 0);
+        }
+
+        /* Status Badges */
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 15px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            background: #f8f9fa;
+            transition: background 0.3s;
+        }
+
+        .status-item:hover {
+            background: #e9ecef;
+        }
+
+        .status-badge {
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+
+        .badge-pending { background: #ffc107; color: #000; }
+        .badge-preparing { background: #ff9800; color: #fff; }
+        .badge-delivering { background: #ff5722; color: #fff; }
+        .badge-success { background: #4caf50; color: #fff; }
+        .badge-cancelled { background: #9e9e9e; color: #fff; }
+        .badge-rejected { background: #f44336; color: #fff; }
+
+        /* Best Selling Items */
+        .best-selling-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            background: linear-gradient(90deg, #fff 0%, #ffe8e0 100%);
+            border-left: 3px solid rgb(187, 62, 0);
+        }
+
+        .item-rank {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: rgb(187, 62, 0);
+            min-width: 40px;
+        }
+
+        .item-info {
+            flex-grow: 1;
+            margin-left: 15px;
+        }
+
+        .item-name {
+            font-weight: bold;
+            font-size: 1rem;
+        }
+
+        .item-type {
+            font-size: 0.8rem;
+            color: #6c757d;
+        }
+
+        .item-sold {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: rgb(187, 62, 0);
+        }
+
+        /* Low Stock Alert */
+        .low-stock-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 15px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            background: #fff3cd;
+            border-left: 3px solid #ff9800;
+        }
+
+        .stock-name {
+            font-weight: 500;
+        }
+
+        .stock-quantity {
+            font-weight: bold;
+            color: #ff5722;
+        }
+
+        /* Recent Orders Table */
+        .order-table-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 15px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            background: rgb(187, 62, 0);
+            color: white;
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+
+        .order-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            background: #f8f9fa;
+            transition: background 0.3s;
+        }
+
+        .order-row:hover {
+            background: #e9ecef;
+        }
+
+        .order-id {
+            font-weight: bold;
+            color: rgb(187, 62, 0);
+            min-width: 100px;
+        }
+
+        .order-customer {
+            flex-grow: 1;
+            margin-left: 15px;
+            min-width: 120px;
+        }
+
+        .order-price {
+            font-weight: bold;
+            min-width: 100px;
+            text-align: right;
+        }
+
+        .order-status {
+            min-width: 120px;
+            text-align: center;
+        }
+
+        .header-id { min-width: 100px; }
+        .header-customer { flex-grow: 1; margin-left: 15px; min-width: 120px; }
+        .header-price { min-width: 100px; text-align: right; }
+        .header-status { min-width: 120px; text-align: center; }
+
+        /* Daily Goal Progress Bar */
+        .goal-container {
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-top: 15px;
+        }
+
+        .goal-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            font-size: 0.9rem;
+        }
+
+        .goal-label {
+            color: #6c757d;
+            font-weight: 500;
+        }
+
+        .goal-amount {
+            font-weight: bold;
+            color: rgb(187, 62, 0);
+        }
+
+        .progress-bar-container {
+            width: 100%;
+            height: 25px;
+            background: #e9ecef;
+            border-radius: 15px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, rgb(187, 62, 0) 0%, rgb(255, 120, 50) 100%);
+            transition: width 0.8s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 0.85rem;
+        }
+
+        .progress-percentage {
+            position: absolute;
+            width: 100%;
+            text-align: center;
+            line-height: 25px;
+            font-weight: bold;
+            color: #495057;
+            z-index: 1;
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #6c757d;
+        }
+
+        .empty-icon {
+            font-size: 3rem;
+            margin-bottom: 15px;
+            opacity: 0.5;
+        }
+
+        /* Alert */
+        .alert-custom {
+            border-left: 4px solid #f44336;
+            background: #ffebee;
+            color: #c62828;
+        }
+
+        @media (max-width: 768px) {
+            .stat-card {
+                margin-bottom: 15px;
+            }
+            
+            .order-row {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            
+            .order-customer, .order-price, .order-status {
+                margin-left: 0;
+                margin-top: 5px;
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <%- include('header') %>
+    </header>
+
+    <div class="dashboard-container">
+        <h1 class="page-title">📊 Dashboard</h1>
+
+        <% if (typeof error !== 'undefined') { %>
+            <div class="alert alert-custom" role="alert">
+                <strong>⚠️ เกิดข้อผิดพลาด:</strong> <%= error %>
+            </div>
+        <% } %>
+
+        <!-- Summary Statistics Cards -->
+        <div class="row">
+            <div class="col-lg-3 col-md-6">
+                <div class="stat-card">
+                    <div class="stat-icon">📦</div>
+                    <div class="stat-value"><%= stats.totalOrders %></div>
+                    <div class="stat-label">คำสั่งซื้อทั้งหมด</div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <div class="stat-card">
+                    <div class="stat-icon">💰</div>
+                    <div class="stat-value">฿<%= stats.totalRevenue.toLocaleString() %></div>
+                    <div class="stat-label">ยอดขายรวม</div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <div class="stat-card">
+                    <div class="stat-icon">👥</div>
+                    <div class="stat-value"><%= stats.totalCustomers %></div>
+                    <div class="stat-label">จำนวนบัญชีลูกค้า</div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <div class="stat-card">
+                    <% if (stats.topPizza) { %>
+                        <% 
+                        // Calculate pizza image based on ID
+                        let pizzaImageId;
+                        if (stats.topPizza.pizza_id <= 9) {
+                            pizzaImageId = stats.topPizza.pizza_id;
+                        } else {
+                            pizzaImageId = (stats.topPizza.pizza_id % 6) + 4;
+                        }
+                        %>
+                        <div class="pizza-header">
+                            <div class="pizza-icon">🍕</div>
+                            <img src="images/pizza<%= pizzaImageId %>.png" alt="<%= stats.topPizza.pizza_name %>" class="pizza-image">
+                        </div>
+                        <div class="pizza-name"><%= stats.topPizza.pizza_name %></div>
+                        <div class="pizza-stats">
+                            <%= stats.topPizza.total_sold %> ชิ้น • ฿<%= stats.topPizza.total_revenue.toLocaleString() %>
+                        </div>
+                    <% } else { %>
+                        <div class="stat-icon">🍕</div>
+                        <div class="stat-value" style="font-size: 1.5rem;">-</div>
+                        <div class="stat-label">ยังไม่มีข้อมูล</div>
+                    <% } %>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Order Status Breakdown -->
+            <div class="col-lg-6 mb-4">
+                <div class="section-card">
+                    <h3 class="section-title">📈 สถานะคำสั่งซื้อ</h3>
+                    <% if (statusBreakdown.length > 0) { %>
+                        <% 
+                        const statusLabels = {
+                            pending: 'รอการอนุมัติ',
+                            preparing: 'กำลังเตรียม',
+                            delivering: 'กำลังจัดส่ง',
+                            success: 'สำเร็จแล้ว',
+                            cancelled: 'ยกเลิกแล้ว',
+                            rejected: 'ปฏิเสธแล้ว'
+                        };
+                        %>
+                        <% statusBreakdown.forEach(function(status) { %>
+                            <div class="status-item">
+                                <span><%= statusLabels[status.order_status] || status.order_status %></span>
+                                <span class="status-badge badge-<%= status.order_status %>"><%= status.count %> รายการ</span>
+                            </div>
+                        <% }); %>
+                    <% } else { %>
+                        <div class="empty-state">
+                            <div class="empty-icon">📭</div>
+                            <p>ยังไม่มีคำสั่งซื้อในระบบ</p>
+                        </div>
+                    <% } %>
+
+                    <!-- Daily Goal Progress Bar -->
+                    <div class="goal-container">
+                        <div class="goal-header">
+                            <span class="goal-label">🎯 เป้าหมายยอดขายวันนี้</span>
+                            <span class="goal-amount">฿<%= stats.todayRevenue.toLocaleString() %> / ฿<%= stats.dailyGoal.toLocaleString() %></span>
+                        </div>
+                        <div class="progress-bar-container">
+                            <% 
+                            const percentage = Math.min((stats.todayRevenue / stats.dailyGoal) * 100, 100);
+                            %>
+                            <div class="progress-bar-fill" style="width: <%= percentage %>%;">
+                                <% if (percentage > 15) { %>
+                                    <%= percentage.toFixed(0) %>%
+                                <% } %>
+                            </div>
+                            <% if (percentage <= 15) { %>
+                                <div class="progress-percentage"><%= percentage.toFixed(0) %>%</div>
+                            <% } %>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Best Selling Items -->
+            <div class="col-lg-6 mb-4">
+                <div class="section-card">
+                    <h3 class="section-title">🏆 สินค้าขายดี TOP 5</h3>
+                    <% if (bestSelling.length > 0) { %>
+                        <% bestSelling.forEach(function(item, index) { %>
+                            <div class="best-selling-item">
+                                <div class="item-rank">#<%= index + 1 %></div>
+                                <div class="item-info">
+                                    <div class="item-name"><%= item.item_name %></div>
+                                    <div class="item-type"><%= item.item_type === 'pizza' ? '🍕 พิซซ่า' : '🥤 เครื่องเคียง' %></div>
+                                </div>
+                                <div class="item-sold"><%= item.total_sold %> ชิ้น</div>
+                            </div>
+                        <% }); %>
+                    <% } else { %>
+                        <div class="empty-state">
+                            <div class="empty-icon">📊</div>
+                            <p>ยังไม่มีข้อมูลการขาย</p>
+                        </div>
+                    <% } %>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Low Stock Alert -->
+            <div class="col-lg-6 mb-4">
+                <div class="section-card">
+                    <h3 class="section-title">⚠️ สินค้าใกล้หมด</h3>
+                    
+                    <!-- วัตถุดิบ TOP 3 -->
+                    <h4 class="section-subtitle">🥫 วัตถุดิบ</h4>
+                    <% if (lowStockIngredients.length > 0) { %>
+                        <% lowStockIngredients.forEach(function(item) { %>
+                            <div class="low-stock-item">
+                                <div class="stock-name">
+                                    <%= item.thai_name || item.ingredient_name %>
+                                </div>
+                                <div class="stock-quantity">
+                                    เหลือ <%= item.stock_quantity %> <%= item.unit %>
+                                </div>
+                            </div>
+                        <% }); %>
+                    <% } else { %>
+                        <div class="empty-state" style="padding: 20px;">
+                            <p style="margin: 0; font-size: 0.9rem;">✅ วัตถุดิบเพียงพอทั้งหมด</p>
+                        </div>
+                    <% } %>
+
+                    <!-- อื่น ๆ TOP 3 -->
+                    <h4 class="section-subtitle">🧃 อื่น ๆ</h4>
+                    <% if (lowStockEtc.length > 0) { %>
+                        <% lowStockEtc.forEach(function(item) { %>
+                            <div class="low-stock-item">
+                                <div class="stock-name">
+                                    <%= item.etc_name %>
+                                </div>
+                                <div class="stock-quantity">
+                                    เหลือ <%= item.stock_quantity %> <%= item.unit %>
+                                </div>
+                            </div>
+                        <% }); %>
+                    <% } else { %>
+                        <div class="empty-state" style="padding: 20px;">
+                            <p style="margin: 0; font-size: 0.9rem;">✅ สินค้าอื่น ๆ เพียงพอทั้งหมด</p>
+                        </div>
+                    <% } %>
+                </div>
+            </div>
+
+            <!-- Recent Orders -->
+            <div class="col-lg-6 mb-4">
+                <div class="section-card">
+                    <h3 class="section-title">🕐 คำสั่งซื้อล่าสุด</h3>
+                    <% if (recentOrders.length > 0) { %>
+                        <!-- Table Header -->
+                        <div class="order-table-header">
+                            <div class="header-id">Order ID</div>
+                            <div class="header-customer">ชื่อลูกค้า</div>
+                            <div class="header-price">ราคา</div>
+                            <div class="header-status">สถานะออเดอร์</div>
+                        </div>
+                        
+                        <!-- Table Rows -->
+                        <% recentOrders.forEach(function(order) { %>
+                            <div class="order-row">
+                                <div class="order-id">#<%= order.order_id %></div>
+                                <div class="order-customer"><%= order.username %></div>
+                                <div class="order-price">฿<%= order.total_price.toLocaleString() %></div>
+                                <div class="order-status">
+                                    <span class="status-badge badge-<%= order.order_status %>">
+                                        <%= order.order_status %>
+                                    </span>
+                                </div>
+                            </div>
+                        <% }); %>
+                    <% } else { %>
+                        <div class="empty-state">
+                            <div class="empty-icon">📭</div>
+                            <p>ยังไม่มีคำสั่งซื้อ</p>
+                        </div>
+                    <% } %>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <footer>
+        <%- include('footer') %>
+    </footer>
+
+</body>
+</html>
