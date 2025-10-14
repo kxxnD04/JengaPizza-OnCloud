@@ -1,18 +1,19 @@
 require('dotenv').config();
 const mysql = require('mysql2');
 
-// Create a connection pool
-const pool = mysql.createPool({
-  host: process.env.DB_HOST || 'localhost',
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME || 'pizzeria',
-  port: process.env.DB_PORT || 3306,
+const dbConfig = {
+  host: process.env.RDS_HOSTNAME || process.env.DB_HOST || 'localhost',
+  user: process.env.RDS_USER || process.env.DB_USER || 'root',
+  password: process.env.RDS_PASSWORD || process.env.DB_PASSWORD,
+  database: process.env.RDS_DB_NAME || process.env.DB_NAME || 'pizzeria',
+  port: process.env.RDS_PORT || process.env.DB_PORT || 3306,
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
   charset: 'utf8mb4'
-});
+};
+
+const pool = mysql.createPool(dbConfig);
 
 // Get the promise-based version
 const promisePool = pool.promise();
