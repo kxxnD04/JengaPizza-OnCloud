@@ -27,7 +27,7 @@
             position: fixed;
             width: 100%;
             height: 100%;
-            background-image: url("images/bg-pizza.jpg");
+            background-image: url("<%= S3_BUCKET_URL %>/images/bg-pizza.jpg");
             opacity: 0.1;
             z-index: -1;
         }
@@ -168,7 +168,7 @@
             <div class="container aboutus" id="aboutus">
                 <div class="row">
                     <div class="col-md-6 text-center delivery-image">
-                        <img src="images/okman.png" alt="Pizza Delivery">
+                        <img src="<%= S3_BUCKET_URL %>/images/okman.png" alt="Pizza Delivery">
                     </div>
                     <div class="col-md-6 d-flex justify-content-center align-items-center">
                         <div class="motto-text">

@@ -29,7 +29,7 @@
             position: fixed;
             width: 100%;
             height: 100%;
-            background-image: url("images/bg-pizza.jpg");
+            background-image: url("<%= S3_BUCKET_URL %>/images/bg-pizza.jpg");
             opacity: 0.1;
             z-index: -1;
         }
@@ -212,13 +212,13 @@
             <div class="banner-container">
                 <div class="banner-slides" id="bannerSlides">
                     <div class="banner-slide">
-                        <img src="images/banner1.png" alt="Special Delicious Pizza" class="banner-image">
+                        <img src="<%= S3_BUCKET_URL %>/images/banner1.png" alt="Special Delicious Pizza" class="banner-image">
                     </div>
                     <div class="banner-slide">
-                        <img src="images/banner2.png" alt="Banner 2" class="banner-image">
+                        <img src="<%= S3_BUCKET_URL %>/images/banner2.png" alt="Banner 2" class="banner-image">
                     </div>
                     <div class="banner-slide">
-                        <img src="images/banner3.png" alt="Banner 3" class="banner-image">
+                        <img src="<%= S3_BUCKET_URL %>/images/banner3.png" alt="Banner 3" class="banner-image">
                     </div>
                 </div>
                 <!-- Navigation Dots -->
@@ -241,21 +241,21 @@
                     <div class="row">
                         <div class="filterDiv flavour col-md-4 ">
                             <div class="card p-3">
-                                <a href="/pizza-4"><img src="images/pizza4.png" alt="พิซซ่ามารินารา"></a>
+                                <a href="/pizza-4"><img src="<%= S3_BUCKET_URL %>/images/pizza4.png" alt="พิซซ่ามารินารา"></a>
                                 <p>พิซซ่ามารินารา</p>
                             </div>
                         </div>
 
                         <div class="filterDiv flavour col-md-4 ">
                             <div class="card p-3">
-                                <a href="/pizza-5"><img src="images/pizza5.png" alt="พิซซ่าฮาวาเอี้ยน"></a>
+                                <a href="/pizza-5"><img src="<%= S3_BUCKET_URL %>/images/pizza5.png" alt="พิซซ่าฮาวาเอี้ยน"></a>
                                 <p>พิซซ่าฮาวาเอี้ยน</p>
                             </div>
                         </div>
 
                         <div class="filterDiv flavour col-md-4 ">
                             <div class="card p-3">
-                                <a href="/pizza-6"><img src="images/pizza6.png" alt="พิซซ่าเวเจเทเรียน"></a>
+                                <a href="/pizza-6"><img src="<%= S3_BUCKET_URL %>/images/pizza6.png" alt="พิซซ่าเวเจเทเรียน"></a>
                                 <p>พิซซ่าเวเจเทเรียน</p>
                             </div>
                         </div>
@@ -330,7 +330,7 @@
             <div class="container aboutus" id="aboutus">
                 <div class="row">
                     <div class="col-md-6 text-center delivery-image">
-                        <img src="images/okman.png" alt="Pizza Delivery">
+                        <img src="<%= S3_BUCKET_URL %>/images/okman.png" alt="Pizza Delivery">
                     </div>
                     <div class="col-md-6 d-flex justify-content-center align-items-center">
                         <div class="motto-text">

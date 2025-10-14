@@ -26,7 +26,7 @@
             position: fixed;
             width: 100%;
             height: 100%;
-            background-image: url("images/bg-pizza.jpg");
+            background-image: url("<%= S3_BUCKET_URL %>/images/bg-pizza.jpg");
             opacity: 0.05;
             z-index: -1;
         }
@@ -440,7 +440,7 @@
                         %>
                         <div class="pizza-header">
                             <div class="pizza-icon">🍕</div>
-                            <img src="images/pizza<%= pizzaImageId %>.png" alt="<%= stats.topPizza.pizza_name %>" class="pizza-image">
+                            <img src="<%= S3_BUCKET_URL %>/images/pizza<%= pizzaImageId %>.png" alt="<%= stats.topPizza.pizza_name %>" class="pizza-image">
                         </div>
                         <div class="pizza-name"><%= stats.topPizza.pizza_name %></div>
                         <div class="pizza-stats">

@@ -133,7 +133,7 @@
             <div class="row">
                 <div class="col-md-6">
                     <div class="pizza-card p-3">
-                        <img src="images\etc<%= item[0].etc_id %>.png" alt="พิซซ่า">
+                        <img src="<%= S3_BUCKET_URL %>/images/etc<%= item[0].etc_id %>.png" alt="พิซซ่า">
                         <p id="price"
                             style="text-align: center; font-size: 20px; font-weight: bolder; color: rgb(187, 62, 0);">
                             <%= item[0].price %> บาท
@@ -170,21 +170,21 @@
             <div class="row">
                 <div class="filterDiv flavour col-md-4 ">
                     <div class="card p-3">
-                        <a href="/etc-1"><img src="images/etc1.png" alt="ฮาวาเอี้ยน"></a>
+                        <a href="/etc-1"><img src="<%= S3_BUCKET_URL %>/images/etc1.png" alt="ฮาวาเอี้ยน"></a>
                         <p>น้ำเปล่า</p>
                     </div>
                 </div>
 
                 <div class="filterDiv ingredient col-md-4">
                     <div class="card p-3">
-                        <a href="/etc-3"><img src="images/etc3.png" alt="ผัก"></a>
+                        <a href="/etc-3"><img src="<%= S3_BUCKET_URL %>/images/etc3.png" alt="ผัก"></a>
                         <p>ไก่ทอด เดวิลวิงส์</p>
                     </div>
                 </div>
 
                 <div class="filterDiv ingredient col-md-4">
                     <div class="card p-3">
-                        <a href="/etc-6"><img src="images/etc6.png" alt="เบค่อน"></a>
+                        <a href="/etc-6"><img src="<%= S3_BUCKET_URL %>/images/etc6.png" alt="เบค่อน"></a>
                         <p>เค้กทีรามิสุ</p>
                     </div>
                 </div>

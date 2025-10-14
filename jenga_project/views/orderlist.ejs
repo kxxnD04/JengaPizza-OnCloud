@@ -175,7 +175,7 @@
                         %>
                         <div id="<%= menu[i].order_id %> <%= menu[i].pizza_id %> <%= menu[i].type %>" class="col-md-6">
                             <div class="card p-3">
-                                <img src="images/pizza<%= pizzaImageId %>.png" alt="<%= menu[i].pizza_name %>">
+                                <img src="<%= S3_BUCKET_URL %>/images/pizza<%= pizzaImageId %>.png" alt="<%= menu[i].pizza_name %>">
                                 <p style="font-size: 26px; color: rgb(187, 62, 0);">
                                     <%= menu[i].pizza_name %>
                                 </p>
@@ -221,7 +221,7 @@
                             <div id="<%= menu[i].order_id %> <%= menu[i].etc_id %> <%= menu[i].type %>"
                                 class="col-md-6">
                                 <div class="card p-3">
-                                    <img src="images/etc<%= menu[i].etc_id %>.png" alt="<%= menu[i].etc_name %>">
+                                    <img src="<%= S3_BUCKET_URL %>/images/etc<%= menu[i].etc_id %>.png" alt="<%= menu[i].etc_name %>">
                                     <p style="font-size: 26px; color: rgb(187, 62, 0);">
                                         <%= menu[i].etc_name %>
                                     </p>

@@ -26,7 +26,7 @@
             position: fixed;
             width: 100%;
             height: 100%;
-            background-image: url("images/bg-pizza.jpg");
+            background-image: url("<%= S3_BUCKET_URL %>/images/bg-pizza.jpg");
             opacity: 0.1;
             z-index: -1;
         }
@@ -162,10 +162,10 @@
                         <div class="card p-3">
                             <% if(pizza_item[i].pizza_id>= 4 && pizza_item[i].pizza_id <= 9){ %>
                                     <a href="/pizza-<%= pizza_item[i].pizza_id %>"><img
-                                            src="images/pizza<%= pizza_item[i].pizza_id %>.png"
+                                            src="<%= S3_BUCKET_URL %>/images/pizza<%= pizza_item[i].pizza_id %>.png"
                                             alt=<%=pizza_item[i].pizza_name %>></a>
                                     <% } else{ %>
-                                        <a href="/pizza-<%= pizza_item[i].pizza_id %>"><img src="images/pizza.png"
+                                        <a href="/pizza-<%= pizza_item[i].pizza_id %>"><img src="<%= S3_BUCKET_URL %>/images/pizza.png"
                                                 alt=<%=pizza_item[i].pizza_name %>></a>
                                         <% } %>
                                             <p>
@@ -180,7 +180,7 @@
                             <div class="filterDiv etc col-md-4 ">
                                 <div class="card p-3">
                                     <a href="/etc-<%= etc_item[i].etc_id %>"><img
-                                            src="images/etc<%= etc_item[i].etc_id %>.png" alt=<%=etc_item[i].etc_name
+                                            src="<%= S3_BUCKET_URL %>/images/etc<%= etc_item[i].etc_id %>.png" alt=<%=etc_item[i].etc_name
                                             %>></a>
                                     <p>
                                         <%= etc_item[i].etc_name %>
@@ -192,7 +192,7 @@
                                 <% for(var i=0; i < ingredient_item.length; i++) { %>
                                     <div class="filterDiv ingredient col-md-4 ">
                                         <div class="card p-3">
-                                            <img src="images/<%= ingredient_item[i].ingredient_name %>.png"
+                                            <img src="<%= S3_BUCKET_URL %>/images/<%= ingredient_item[i].ingredient_name %>.png"
                                                 alt=<%=ingredient_item[i].thai_name %>>
                                             <p>
                                                 <%= ingredient_item[i].thai_name %>

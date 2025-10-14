@@ -2,6 +2,8 @@ require('dotenv').config();
 const express = require("express");
 const compression = require("compression");
 const multer = require("multer");
+const multerS3 = require("multer-s3");
+const { S3Client, PutObjectCommand } = require("@aws-sdk/client-s3");
 const path = require("path");
 const port = process.env.PORT || 3000;
 const bodyParser = require("body-parser");
@@ -9,24 +11,36 @@ const db = require('./db'); // Import MySQL connection
 const session = require('express-session');
 const { log, error } = require("console");
 
-const storage = multer.diskStorage({
-  destination: "uploads/",
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname);
-    const newFileName = "order" + "-" + uniqueSuffix + ext;
-
-    cb(null, newFileName);
-  },
+// Configure AWS S3 Client (v3)
+const s3Client = new S3Client({
+  region: process.env.AWS_REGION || 'us-east-1'
 });
 
-const upload = multer({ storage: storage });
+console.log('S3 Client initialized with region:', process.env.AWS_REGION || 'us-east-1');
+console.log('S3 Bucket:', process.env.S3_BUCKET_NAME || 'jengapizza-uploads-202501');
+
+// Configure multer to use memory storage (แทน multer-s3)
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024 // จำกัด 5MB
+  }
+});
 
 // Creating the Express server
 const app = express();
 
+// S3 Bucket URL for images
+const S3_BUCKET_URL = process.env.S3_BUCKET_URL || '';
+
 // Enable gzip compression for all responses
 app.use(compression());
+
+// Middleware to make S3_BUCKET_URL available in all views
+app.use((req, res, next) => {
+  res.locals.S3_BUCKET_URL = S3_BUCKET_URL;
+  next();
+});
 
 // Session setup
 app.use(session({
@@ -83,9 +97,38 @@ app.post("/complete_order", upload.single("file"), async (req, res) => {
   }
 
   try {
-    let payment_proof = "/uploads/" + req.file.filename;
+    // สร้างชื่อไฟล์
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    const ext = path.extname(req.file.originalname);
+    const key = `uploads/order-${uniqueSuffix}${ext}`;
+    
+    const bucketName = process.env.S3_BUCKET_NAME || 'jengapizza-uploads-202501';
+    const region = process.env.AWS_REGION || 'us-east-1';
 
-    // อัปเดต order ให้มีสลิปและเปลี่ยน status เป็น "pending" (รอ admin อนุมัติ)
+    console.log("Attempting to upload to S3:", {
+      bucket: bucketName,
+      key: key,
+      size: req.file.size,
+      mimetype: req.file.mimetype
+    });
+    
+    // Upload ไปยัง S3 ด้วย PutObjectCommand
+    const uploadParams = {
+      Bucket: bucketName,
+      Key: key,
+      Body: req.file.buffer,
+      ContentType: req.file.mimetype
+    };
+
+    const command = new PutObjectCommand(uploadParams);
+    await s3Client.send(command);
+
+    // สร้าง URL
+    const payment_proof = `https://${bucketName}.s3.${region}.amazonaws.com/${key}`;
+
+    console.log("File uploaded to S3 successfully:", payment_proof);
+
+    // บันทึกลงฐานข้อมูล
     const complete_query =
       `UPDATE orders
       SET payment_proof = ?, order_status = "pending"
@@ -93,21 +136,26 @@ app.post("/complete_order", upload.single("file"), async (req, res) => {
 
     await new Promise((resolve, reject) => {
       db.run(complete_query, [payment_proof, req.session.user_id], (error) => (error ? reject(error) : resolve()));
-    })
+    });
 
-    console.log("Payment proof uploaded, waiting for admin approval");
+    console.log("Payment proof saved to database:", payment_proof);
 
     res.json({
       message: "อัปโหลดหลักฐานการชำระเงินสำเร็จ รอการตรวจสอบจากทางร้าน",
-      filename: req.file.filename,
-      path: "/uploads/" + req.file.filename,
+      filename: key,
+      path: payment_proof,
       redirect: '/tracking'
     });
 
   } catch (error) {
     console.error("Complete order error:", error);
+    console.error("Error name:", error.name);
+    console.error("Error code:", error.code);
+    console.error("Error stack:", error.stack);
     res.status(500).json({ 
-      message: "เกิดข้อผิดพลาดในการอัปโหลด", 
+      message: "เกิดข้อผิดพลาดในการอัปโหลด: " + error.message,
+      errorCode: error.code,
+      errorName: error.name,
       redirect: '/qrpayment' 
     });
   }
@@ -403,7 +451,8 @@ app.post("/create", async (req, res) => {
   });
 });
 
-app.use('/uploads', express.static('uploads'));
+// Note: No longer need to serve uploads folder as static files
+// All uploads are now stored in S3 bucket
 
 app.get("/orderlist", async (req, res) => {
   if (!req.session.loggedin) {

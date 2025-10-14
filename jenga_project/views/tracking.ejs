@@ -25,7 +25,7 @@
             position: fixed;
             width: 100%;
             height: 100%;
-            background-image: url("images/bg-pizza.jpg");
+            background-image: url("<%= S3_BUCKET_URL %>/images/bg-pizza.jpg");
             opacity: 0.1;
             z-index: -1;
         }
@@ -99,7 +99,7 @@
                                             statusImage = 'cancelled';
                                         }
                                     %>
-                                    <img src="images/<%= statusImage %>.png" class="order-icon">
+                                    <img src="<%= S3_BUCKET_URL %>/images/<%= statusImage %>.png" class="order-icon">
                                 </div>
                                 <div class="col-6">
                                     <h5 id="order-<%= order[i].order_id %>">Order No. <%= order[i].order_id %></h5>

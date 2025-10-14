@@ -3,7 +3,7 @@
 <!-- navbar -->
 <div class="navbar">
   <div class="logo">
-    <img src="images\Logo.png" alt="Logo" style="height: 40px;">
+    <img src="<%= S3_BUCKET_URL %>/images/Logo.png" alt="Logo" style="height: 40px;">
   </div>
 
   <div class="d-flex">
@@ -84,7 +84,7 @@
       <div class="logout-button">
         <a href="/logout">
           <div class="d-flex align-items-center justify-content-center">
-            <img src="images/user-icon.png" alt="User icon" class="login-icon">
+            <img src="<%= S3_BUCKET_URL %>/images/user-icon.png" alt="User icon" class="login-icon">
             <span>ออกจากระบบ</span>
           </div>
         </a>
@@ -93,7 +93,7 @@
         <div class="login-button">
           <a href="/login" id="login-trigger">
             <div class="d-flex align-items-center justify-content-center">
-              <img src="images/user-icon.png" alt="User icon" class="login-icon">
+              <img src="<%= S3_BUCKET_URL %>/images/user-icon.png" alt="User icon" class="login-icon">
               <span>เข้าสู่ระบบ/ลงทะเบียน</span>
             </div>
           </a>
@@ -103,57 +103,57 @@
           <% if(loggedin && (user_privilege==='admin' || user_privilege==='employee' )){ %>
             <hr class="sidebar-divider">
             <div class="sidebar-menu-item">
-              <img src="images/dashboard-icon.png" alt="Dashboard icon">
+              <img src="<%= S3_BUCKET_URL %>/images/dashboard-icon.png" alt="Dashboard icon">
               <a href="/dashboard">Dashboard</a>
             </div>
             <div class="sidebar-menu-item">
-              <img src="images/manage_food-icon.png" alt="Delivery icon">
+              <img src="<%= S3_BUCKET_URL %>/images/manage_food-icon.png" alt="Delivery icon">
               <a href="/ingredients_seller">จัดการคลังสินค้า</a>
             </div>
             <div class="sidebar-menu-item">
-              <img src="images/manage_order-icon.png" alt="FAQ icon">
+              <img src="<%= S3_BUCKET_URL %>/images/manage_order-icon.png" alt="FAQ icon">
               <a href="/tracking_seller">จัดการคำสั่งซื้อ</a>
             </div>
 
             <% } else if(loggedin && user_privilege=="customer" ){ %>
               <hr class="sidebar-divider">
               <div class="sidebar-menu-item">
-                <img src="images/home-icon.png" alt="Home icon">
+                <img src="<%= S3_BUCKET_URL %>/images/home-icon.png" alt="Home icon">
                 <a href="/home">หน้าหลัก</a>
               </div>
               <div class="sidebar-menu-item">
-                <img src="images/delivery-icon.png" alt="Delivery icon">
+                <img src="<%= S3_BUCKET_URL %>/images/delivery-icon.png" alt="Delivery icon">
                 <a href="/tracking">ติดตามสินค้า</a>
               </div>
               <div class="sidebar-menu-item">
-                <img src="images/faq-icon.png" alt="FAQ icon">
+                <img src="<%= S3_BUCKET_URL %>/images/faq-icon.png" alt="FAQ icon">
                 <a href="/home#howto">วิธีสั่งซื้อ</a>
               </div>
               <div class="sidebar-menu-item">
-                <img src="images/pizza-icon.png" alt="Pizza icon">
+                <img src="<%= S3_BUCKET_URL %>/images/pizza-icon.png" alt="Pizza icon">
                 <a href="/faq">เกี่ยวกับเรา</a>
               </div>
               <div class="sidebar-menu-item">
-                <img src="images/contact-icon.png" alt="Contact icon">
+                <img src="<%= S3_BUCKET_URL %>/images/contact-icon.png" alt="Contact icon">
                 <a href="#footer-custom">ติดต่อสอบถาม</a>
               </div>
 
               <% } else{ %>
                 <hr class="sidebar-divider">
                 <div class="sidebar-menu-item">
-                  <img src="images/home-icon.png" alt="Home icon">
+                  <img src="<%= S3_BUCKET_URL %>/images/home-icon.png" alt="Home icon">
                   <a href="/home">หน้าหลัก</a>
                 </div>
                 <div class="sidebar-menu-item">
-                  <img src="images/faq-icon.png" alt="FAQ icon">
+                  <img src="<%= S3_BUCKET_URL %>/images/faq-icon.png" alt="FAQ icon">
                   <a href="/home#howto">วิธีสั่งซื้อ</a>
                 </div>
                 <div class="sidebar-menu-item">
-                  <img src="images/pizza-icon.png" alt="Pizza icon">
+                  <img src="<%= S3_BUCKET_URL %>/images/pizza-icon.png" alt="Pizza icon">
                   <a href="/faq">เกี่ยวกับเรา</a>
                 </div>
                 <div class="sidebar-menu-item">
-                  <img src="images/contact-icon.png" alt="Contact icon">
+                  <img src="<%= S3_BUCKET_URL %>/images/contact-icon.png" alt="Contact icon">
                   <a href="#footer-custom">ติดต่อสอบถาม</a>
                 </div>
 
