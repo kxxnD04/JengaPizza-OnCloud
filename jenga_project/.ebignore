@@ -1,0 +1,43 @@
+# .ebignore - ไฟล์ที่ไม่ต้อง deploy ไป Elastic Beanstalk
+
+# Dependencies
+node_modules/
+
+# Git
+.git/
+.gitignore
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Test files
+test/
+*.test.js
+
+# Documentation (optional)
+README.md
+docs/
+
+# Database files (ถ้ามี SQLite local)
+*.db
+*.sqlite
+*.sqlite3
