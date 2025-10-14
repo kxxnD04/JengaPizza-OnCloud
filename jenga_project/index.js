@@ -1,5 +1,6 @@
 require('dotenv').config();
 const express = require("express");
+const compression = require("compression");
 const multer = require("multer");
 const path = require("path");
 const port = process.env.PORT || 3000;
@@ -24,6 +25,9 @@ const upload = multer({ storage: storage });
 // Creating the Express server
 const app = express();
 
+// Enable gzip compression for all responses
+app.use(compression());
+
 // Session setup
 app.use(session({
   secret: process.env.SESSION_SECRET || 'secret',
@@ -37,11 +41,25 @@ app.use(session({
 app.use(express.json());
 
 app.use(bodyParser.urlencoded({ extended: true }));
-// static resources & template engine
-app.use(express.static("views"));
+
+// Static resources with caching
+app.use(express.static("views", {
+  maxAge: '1d', // Cache static files for 1 day
+  etag: true,
+  lastModified: true
+}));
 
 // Set EJS as templating engine
 app.set("view engine", "ejs");
+
+// Health check endpoint for Load Balancer
+app.get("/health", (req, res) => {
+  res.status(200).json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
+  });
+});
 
 app.get("/", (req, res) => {
   res.redirect('home');

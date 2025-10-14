@@ -460,6 +460,12 @@
     const cartToggle = document.getElementById('cartToggle');
     const cartDropdown = document.getElementById('cartDropdown');
 
+    // Check if cart elements exist before adding event listeners
+    if (!cartToggle || !cartDropdown) {
+      console.log('Cart elements not found - user may not be logged in');
+      return;
+    }
+
     // Toggle cart dropdown when cart icon is clicked
     cartToggle.addEventListener('click', function (e) {
       e.preventDefault();
@@ -505,9 +511,9 @@
         e.preventDefault();
 
         // ปิด sidebar modal ถ้ามีการเปิดอยู่
-        if (sidebarModal.classList.contains('show')) {
+        if (sidebarModal && sidebarModal.classList.contains('show')) {
           sidebarModal.classList.remove('show');
-          sidebarOverlay.classList.remove('show');
+          if (sidebarOverlay) sidebarOverlay.classList.remove('show');
           document.body.style.overflow = ''; // Restore scrolling
           // รอให้ sidebar ปิดก่อน แล้วค่อยเลื่อนไปที่ footer
           setTimeout(() => {
@@ -549,9 +555,9 @@
 
         } else {
           // ถ้าอยู่ในหน้า Home แล้ว, ปิด modal และเลื่อนไปที่ #howto
-          if (sidebarModal.classList.contains('show')) {
+          if (sidebarModal && sidebarModal.classList.contains('show')) {
             sidebarModal.classList.remove('show');
-            sidebarOverlay.classList.remove('show');
+            if (sidebarOverlay) sidebarOverlay.classList.remove('show');
             document.body.style.overflow = ''; // Restore scrolling
             // รอให้ sidebar ปิดก่อน แล้วค่อยเลื่อนไปที่ #howto
             setTimeout(() => {
