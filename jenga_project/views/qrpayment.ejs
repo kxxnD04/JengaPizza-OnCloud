@@ -156,11 +156,115 @@
             background-color: #d0d0d0;
             color: white;
         }
+
+        /* Loading Overlay */
+        .loading-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .loading-content {
+            background: white;
+            padding: 40px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+
+        .loading-spinner {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid rgb(187, 62, 0);
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            font-family: Prompt;
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: rgb(187, 62, 0);
+        }
+
+        /* Error Message */
+        .error-message {
+            display: none;
+            background: #ffebee;
+            color: #c62828;
+            padding: 12px 20px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            border-left: 4px solid #f44336;
+            font-family: Prompt;
+            font-weight: 500;
+        }
+
+        /* Success Message */
+        .success-message {
+            display: none;
+            background: #e8f5e9;
+            color: #2e7d32;
+            padding: 12px 20px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            border-left: 4px solid #4caf50;
+            font-family: Prompt;
+            font-weight: 500;
+        }
+
+        /* Preview Controls */
+        .preview-controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            display: none;
+            gap: 5px;
+        }
+
+        .upload-box:hover .preview-controls {
+            display: flex;
+        }
+
+        .preview-controls button {
+            background: rgba(0, 0, 0, 0.7);
+            border: none;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .preview-controls button:hover {
+            background: rgba(0, 0, 0, 0.9);
+        }
     </style>
 </head>
 
 <body>
-    <!-- <div class="window" id="load"></div> -->
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <div class="loading-text">กำลังอัพโหลดหลักฐานการโอน...</div>
+            <p style="color: #6c757d; margin-top: 10px;">กรุณารอสักครู่</p>
+        </div>
+    </div>
 
     <header>
         <%- include('header') %>
@@ -183,15 +287,34 @@
                     </div>
                 </div>
                 <div class="col-md-6 d-flex flex-column align-items-center">
-                    <div class="upload-box mb-3" id="uploadBox">
-                        <input type="file" id="fileInput" accept="image/*" hidden>
+                    <!-- Error Message -->
+                    <div class="error-message" id="errorMessage"></div>
+                    
+                    <!-- Success Message -->
+                    <div class="success-message" id="successMessage"></div>
+
+                    <div class="upload-box mb-3" id="uploadBox" style="position: relative;">
+                        <input type="file" id="fileInput" accept="image/jpeg,image/jpg,image/png" hidden>
                         <label for="fileInput" class="upload-label" id="uploadLabel">
                             <img src="https://cdn-icons-png.flaticon.com/512/1829/1829586.png" alt="Upload Icon"
                                 class="upload-icon" id="uploadIcon">
                             <p class="upload-text">อัปโหลดหลักฐานการโอนเงิน</p>
+                            <p style="font-size: 0.8rem; color: #6c757d; margin-top: 5px;">
+                                รองรับ JPG, JPEG, PNG (สูงสุด 5MB)
+                            </p>
                         </label>
                         <img id="previewImage" src="#" alt="Uploaded Image"
                             style="display: none; width: 100%; height: 100%; object-fit: cover; border-radius: 10px;">
+                        
+                        <!-- Preview Controls -->
+                        <div class="preview-controls" id="previewControls">
+                            <button type="button" title="เปลี่ยนรูป" onclick="document.getElementById('fileInput').click()">
+                                🔄
+                            </button>
+                            <button type="button" title="ลบรูป" onclick="removeImage()">
+                                🗑️
+                            </button>
+                        </div>
                     </div>
                     <div class="button-wrapper d-flex" style="justify-content: center;">
                         <div class="mb-3">
@@ -210,37 +333,106 @@
     </footer>
 
     <script>
-        // window.onload = function(){
-        //     setTimeout(function() {
-        //         document.getElementById("load").style.display = "none";
-        //     }, 2000);
-        // };
+        // Show/Hide Messages
+        function showMessage(type, message) {
+            const errorMsg = document.getElementById('errorMessage');
+            const successMsg = document.getElementById('successMessage');
+            
+            if (type === 'error') {
+                errorMsg.textContent = '❌ ' + message;
+                errorMsg.style.display = 'block';
+                successMsg.style.display = 'none';
+            } else {
+                successMsg.textContent = '✅ ' + message;
+                successMsg.style.display = 'block';
+                errorMsg.style.display = 'none';
+            }
 
+            // Auto hide after 5 seconds
+            setTimeout(() => {
+                errorMsg.style.display = 'none';
+                successMsg.style.display = 'none';
+            }, 5000);
+        }
+
+        // Validate File
+        function validateFile(file) {
+            // Check if file exists
+            if (!file) {
+                showMessage('error', 'กรุณาเลือกไฟล์หลักฐานการโอนเงิน');
+                return false;
+            }
+
+            // Check file type
+            const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+            if (!allowedTypes.includes(file.type)) {
+                showMessage('error', 'รองรับเฉพาะไฟล์ JPG, JPEG และ PNG เท่านั้น');
+                return false;
+            }
+
+            // Check file size (max 5MB)
+            const maxSize = 5 * 1024 * 1024; // 5MB in bytes
+            if (file.size > maxSize) {
+                showMessage('error', 'ขนาดไฟล์ต้องไม่เกิน 5MB (ไฟล์ของคุณ: ' + (file.size / 1024 / 1024).toFixed(2) + 'MB)');
+                return false;
+            }
+
+            return true;
+        }
+
+        // Handle File Selection
         document.getElementById("fileInput").addEventListener("change", function (event) {
             const file = event.target.files[0];
-            if (file) {
+            
+            if (file && validateFile(file)) {
                 const reader = new FileReader();
                 reader.onload = function (e) {
                     document.getElementById("previewImage").src = e.target.result;
                     document.getElementById("previewImage").style.display = "block";
-                    document.getElementById("uploadLabel").style.display = "none"; // Hide upload icon & text
+                    document.getElementById("uploadLabel").style.display = "none";
+                    document.getElementById("previewControls").style.display = "flex";
+                    
+                    // Hide messages
+                    document.getElementById('errorMessage').style.display = 'none';
+                    document.getElementById('successMessage').style.display = 'none';
                 };
                 reader.readAsDataURL(file);
+            } else {
+                // Reset file input if validation failed
+                event.target.value = '';
             }
         });
 
-        previewImage.addEventListener("click", function () {
-            fileInput.click();
+        // Remove Image
+        function removeImage() {
+            document.getElementById('fileInput').value = '';
+            document.getElementById('previewImage').style.display = 'none';
+            document.getElementById('uploadLabel').style.display = 'flex';
+            document.getElementById('previewControls').style.display = 'none';
+        }
+
+        // Click on preview to change image
+        document.getElementById('previewImage').addEventListener("click", function () {
+            document.getElementById('fileInput').click();
         });
 
+        // Complete Transaction
         function completeTrans() {
             const input = document.getElementById('fileInput');
             const target_file = input.files[0];
+            const completeBtn = document.getElementById('completeBtn');
 
-            if (!target_file) {
-                alert("No file selected");
+            // Validate file
+            if (!validateFile(target_file)) {
                 return;
             }
+
+            // Disable button and show loading
+            completeBtn.disabled = true;
+            completeBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> กำลังอัพโหลด...';
+            
+            // Show loading overlay
+            document.getElementById('loadingOverlay').style.display = 'flex';
 
             const formData = new FormData();
             formData.append("file", target_file);
@@ -249,12 +441,46 @@
                 method: "POST",
                 body: formData
             })
-                .then(response => response.json())
-                .then(data => {
-                    window.location.href=data.redirect;
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('เกิดข้อผิดพลาดในการอัพโหลด');
+                    }
+                    return response.json();
                 })
-                .catch(error => console.error("Error:", error));
+                .then(data => {
+                    if (data.success !== false) {
+                        // Success - show success message briefly
+                        document.getElementById('loadingOverlay').style.display = 'none';
+                        showMessage('success', 'อัพโหลดสำเร็จ! กำลังไปยังหน้าถัดไป...');
+                        
+                        setTimeout(() => {
+                            window.location.href = data.redirect;
+                        }, 1000);
+                    } else {
+                        throw new Error(data.message || 'ไม่สามารถอัพโหลดได้');
+                    }
+                })
+                .catch(error => {
+                    console.error("Error:", error);
+                    
+                    // Hide loading and show error
+                    document.getElementById('loadingOverlay').style.display = 'none';
+                    showMessage('error', error.message || 'เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่อีกครั้ง');
+                    
+                    // Re-enable button
+                    completeBtn.disabled = false;
+                    completeBtn.innerHTML = 'เสร็จสิ้น';
+                });
         }
+
+        // Prevent accidental page leave
+        window.addEventListener('beforeunload', function (e) {
+            const fileInput = document.getElementById('fileInput');
+            if (fileInput.files.length > 0) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        });
     </script>
 
 </body>

@@ -1288,6 +1288,210 @@ app.delete("/admin/delete-user", async (req, res) => {
 
 // ==================== END USER MANAGEMENT ROUTES ====================
 
+// POST: Set Daily Goal
+app.post("/dashboard/set-goal", async (req, res) => {
+  // Check if user is admin or employee
+  if (!req.session.loggedin || (req.session.user_privilege !== "admin" && req.session.user_privilege !== "employee")) {
+    return res.status(403).json({ success: false, message: "ไม่มีสิทธิ์เข้าถึง" });
+  }
+
+  const { dailyGoal } = req.body;
+
+  // Validation
+  if (!dailyGoal || dailyGoal < 0) {
+    return res.status(400).json({ success: false, message: "กรุณาใส่ค่าเป้าหมายที่ถูกต้อง" });
+  }
+
+  try {
+    // Store daily goal in session (or database if you want persistent storage)
+    req.session.dailyGoal = parseInt(dailyGoal);
+    
+    res.json({ success: true, message: "บันทึกเป้าหมายสำเร็จ", dailyGoal: parseInt(dailyGoal) });
+  } catch (error) {
+    console.error("Error saving daily goal:", error);
+    res.status(500).json({ success: false, message: "เกิดข้อผิดพลาดในการบันทึก" });
+  }
+});
+
+// GET: Dashboard Data by Date Range (for AJAX filter)
+app.get("/dashboard/data", async (req, res) => {
+  // Check if user is admin or employee
+  if (!req.session.loggedin || (req.session.user_privilege !== "admin" && req.session.user_privilege !== "employee")) {
+    return res.status(403).json({ success: false, message: "ไม่มีสิทธิ์เข้าถึง" });
+  }
+
+  try {
+    const { range } = req.query; // 'today', 'week', 'month', 'all'
+    let dateCondition = '';
+    let intervalDays = 6; // Default 7 days (0-6)
+
+    // Determine date condition based on range
+    switch(range) {
+      case 'today':
+        dateCondition = 'AND DATE(order_date) = CURDATE()';
+        intervalDays = 0; // Only today
+        break;
+      case 'week':
+        dateCondition = 'AND order_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)';
+        intervalDays = 6; // Last 7 days
+        break;
+      case 'month':
+        dateCondition = 'AND order_date >= DATE_SUB(CURDATE(), INTERVAL 29 DAY)';
+        intervalDays = 29; // Last 30 days
+        break;
+      case 'all':
+        dateCondition = ''; // No date restriction
+        intervalDays = null; // Will show all data
+        break;
+      default:
+        dateCondition = 'AND order_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)';
+        intervalDays = 6;
+    }
+
+    // Query for sales data
+    const salesQuery = `
+      SELECT 
+        DATE(order_date) as date,
+        IFNULL(SUM(total_price), 0) as revenue
+      FROM orders
+      WHERE order_status = 'success' ${dateCondition}
+      GROUP BY DATE(order_date)
+      ORDER BY date ASC`;
+
+    // Query for today's revenue (always current day)
+    const todayRevenueQuery = `SELECT IFNULL(SUM(total_price), 0) as revenue FROM orders WHERE order_status = 'success' AND DATE(order_date) = CURDATE()`;
+
+    // Query for top 5 pizzas in the selected range
+    const topPizzasQuery = `
+      SELECT 
+        p.pizza_name,
+        SUM(oi.quantity) as total_sold
+      FROM order_items oi
+      JOIN orders o ON oi.order_id = o.order_id
+      JOIN pizzas p ON oi.item_id = p.pizza_id
+      WHERE oi.item_type = 'pizza' AND o.order_status = 'success' ${dateCondition}
+      GROUP BY oi.item_id, p.pizza_name
+      ORDER BY total_sold DESC
+      LIMIT 5`;
+
+    // Execute queries
+    const salesData = await new Promise((resolve, reject) => {
+      db.all(salesQuery, (error, rows) => (error ? reject(error) : resolve(rows)));
+    });
+
+    const [todayRevenue] = await new Promise((resolve, reject) => {
+      db.all(todayRevenueQuery, (error, rows) => (error ? reject(error) : resolve(rows)));
+    });
+
+    const topPizzas = await new Promise((resolve, reject) => {
+      db.all(topPizzasQuery, (error, rows) => (error ? reject(error) : resolve(rows)));
+    });
+
+    // Process sales data
+    let labels = [];
+    let dataValues = [];
+
+    if (range === 'all') {
+      // For 'all', show each date as-is
+      if (salesData.length > 0) {
+        console.log(`[Dashboard Data API] All Range - Raw sales data:`, salesData);
+        labels = salesData.map(sale => {
+          // Convert Date object to date/month format
+          const date = sale.date instanceof Date ? sale.date : new Date(sale.date);
+          const day = date.getDate();
+          const month = date.getMonth() + 1;
+          return `${day}/${month}`;
+        });
+        dataValues = salesData.map(sale => parseFloat(sale.revenue) || 0);
+        console.log(`[Dashboard Data API] All Range - Labels:`, labels);
+        console.log(`[Dashboard Data API] All Range - Values:`, dataValues);
+      } else {
+        // No data available - show today as fallback
+        const today = new Date();
+        const day = today.getDate();
+        const month = today.getMonth() + 1;
+        labels = [`${day}/${month}`];
+        dataValues = [0];
+      }
+    } else {
+      // For today, week, month - create complete date array
+      const dateArray = [];
+      const labelArray = [];
+      const today = new Date();
+      // Adjust for timezone offset to match MySQL CURDATE()
+      today.setHours(today.getHours() + 7); // Thailand timezone UTC+7
+
+      for (let i = intervalDays; i >= 0; i--) {
+        const date = new Date(today);
+        date.setDate(date.getDate() - i);
+        const dateStr = date.toISOString().split('T')[0];
+        dateArray.push(dateStr);
+
+        // Create label
+        const day = date.getDate();
+        const month = date.getMonth() + 1;
+        
+        if (range === 'today') {
+          labelArray.push('วันนี้');
+        } else if (i === 0) {
+          labelArray.push('วันนี้');
+        } else if (i === 1) {
+          labelArray.push('เมื่อวาน');
+        } else {
+          labelArray.push(`${day}/${month}`);
+        }
+      }
+
+      // Map sales data to date array
+      const salesMap = {};
+      salesData.forEach(sale => {
+        // Convert Date object to YYYY-MM-DD string
+        let dateStr;
+        if (sale.date instanceof Date) {
+          // Adjust for Thailand timezone (UTC+7)
+          const localDate = new Date(sale.date);
+          localDate.setHours(localDate.getHours() + 7);
+          dateStr = localDate.toISOString().split('T')[0];
+        } else {
+          dateStr = sale.date;
+        }
+        salesMap[dateStr] = parseFloat(sale.revenue) || 0;
+      });
+
+      labels = labelArray;
+      dataValues = dateArray.map(date => salesMap[date] || 0);
+      
+      // Log for debugging
+      console.log(`[Dashboard Data API] Range: ${range}, Labels: ${labels.length}, Data points: ${dataValues.length}`);
+      console.log(`[Dashboard Data API] Date Array:`, dateArray);
+      console.log(`[Dashboard Data API] Sales Map:`, salesMap);
+      console.log(`[Dashboard Data API] Data:`, dataValues);
+    }
+
+    // Get daily goal
+    const dailyGoal = req.session.dailyGoal || 5000;
+
+    // Prepare response
+    res.json({
+      success: true,
+      salesChart: {
+        labels: labels,
+        data: dataValues
+      },
+      topPizzas: topPizzas.map(pizza => ({
+        name: pizza.pizza_name,
+        sold: pizza.total_sold
+      })),
+      todayRevenue: todayRevenue.revenue || 0,
+      dailyGoal: dailyGoal
+    });
+
+  } catch (error) {
+    console.error("Dashboard data API error:", error);
+    res.status(500).json({ success: false, message: "เกิดข้อผิดพลาดในการดึงข้อมูล" });
+  }
+});
+
 app.get("/dashboard", async (req, res) => {
   // Check if user is admin or employee
   if (!req.session.loggedin || (req.session.user_privilege !== "admin" && req.session.user_privilege !== "employee")) {
@@ -1296,8 +1500,8 @@ app.get("/dashboard", async (req, res) => {
 
   try {
     // 1. Summary Statistics
-    const totalOrdersQuery = `SELECT COUNT(*) as total FROM orders WHERE payment_proof IS NOT NULL`;
-    const totalRevenueQuery = `SELECT IFNULL(SUM(total_price), 0) as revenue FROM orders WHERE payment_proof IS NOT NULL AND order_status = 'success'`;
+    const totalOrdersQuery = `SELECT COUNT(*) as total FROM orders WHERE order_status != 'pending'`;
+    const totalRevenueQuery = `SELECT IFNULL(SUM(total_price), 0) as revenue FROM orders WHERE order_status = 'success'`;
     const totalCustomersQuery = `SELECT COUNT(*) as total FROM users WHERE user_privilege = 'customer'`;
     const topPizzaQuery = `
       SELECT p.pizza_id, p.pizza_name, SUM(oi.quantity) as total_sold, IFNULL(SUM(oi.quantity * oi.price_per_unit), 0) as total_revenue
@@ -1312,14 +1516,26 @@ app.get("/dashboard", async (req, res) => {
     // 1.1 Today's Revenue (for progress bar)
     const todayRevenueQuery = `SELECT IFNULL(SUM(total_price), 0) as revenue FROM orders WHERE order_status = 'success' AND DATE(order_date) = CURDATE()`;
 
+    // 1.2 Sales for Last 7 Days (for chart)
+    const salesLast7DaysQuery = `
+      SELECT 
+        DATE(order_date) as date,
+        IFNULL(SUM(total_price), 0) as revenue
+      FROM orders
+      WHERE order_status = 'success' 
+        AND order_date >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)
+        AND order_date <= CURDATE()
+      GROUP BY DATE(order_date)
+      ORDER BY date ASC`;
+
     // 2. Order Status Breakdown - Show ALL statuses
     const statusBreakdownQuery = `
       SELECT order_status, COUNT(*) as count 
       FROM orders 
-      WHERE payment_proof IS NOT NULL
+      WHERE order_status != 'pending'
       GROUP BY order_status`;
 
-    // 3. Best Selling Items (TOP 5)
+    // 3. Best Selling Items (TOP 5) - All types combined
     const bestSellingQuery = `
       SELECT 
         CASE 
@@ -1332,6 +1548,20 @@ app.get("/dashboard", async (req, res) => {
       JOIN orders USING (order_id)
       WHERE order_status = 'success'
       GROUP BY item_type, item_id
+      ORDER BY total_sold DESC
+      LIMIT 5`;
+    
+    // 3.1 Best Selling Pizza ONLY (TOP 5) - For Pizza Chart
+    const bestSellingPizzaQuery = `
+      SELECT 
+        p.pizza_name as item_name,
+        'pizza' as item_type,
+        SUM(oi.quantity) as total_sold
+      FROM order_items oi
+      JOIN orders o ON oi.order_id = o.order_id
+      JOIN pizzas p ON oi.item_id = p.pizza_id
+      WHERE oi.item_type = 'pizza' AND o.order_status = 'success'
+      GROUP BY oi.item_id, p.pizza_name
       ORDER BY total_sold DESC
       LIMIT 5`;
 
@@ -1354,7 +1584,7 @@ app.get("/dashboard", async (req, res) => {
       SELECT o.order_id, u.username, o.total_price, o.order_status, o.order_date
       FROM orders o
       JOIN users u ON o.user_id = u.user_id
-      WHERE o.payment_proof IS NOT NULL
+      WHERE o.order_status != 'pending'
       ORDER BY o.order_date DESC
       LIMIT 5`;
 
@@ -1379,12 +1609,20 @@ app.get("/dashboard", async (req, res) => {
       db.all(todayRevenueQuery, (error, rows) => (error ? reject(error) : resolve(rows)));
     });
 
+    const salesLast7Days = await new Promise((resolve, reject) => {
+      db.all(salesLast7DaysQuery, (error, rows) => (error ? reject(error) : resolve(rows)));
+    });
+
     const statusBreakdown = await new Promise((resolve, reject) => {
       db.all(statusBreakdownQuery, (error, rows) => (error ? reject(error) : resolve(rows)));
     });
 
     const bestSelling = await new Promise((resolve, reject) => {
       db.all(bestSellingQuery, (error, rows) => (error ? reject(error) : resolve(rows)));
+    });
+    
+    const bestSellingPizza = await new Promise((resolve, reject) => {
+      db.all(bestSellingPizzaQuery, (error, rows) => (error ? reject(error) : resolve(rows)));
     });
 
     const lowStockIngredients = await new Promise((resolve, reject) => {
@@ -1399,8 +1637,43 @@ app.get("/dashboard", async (req, res) => {
       db.all(recentOrdersQuery, (error, rows) => (error ? reject(error) : resolve(rows)));
     });
 
-    // Daily goal (can be adjusted - default 5000 baht)
-    const dailyGoal = 5000;
+    // Get daily goal from session or use default
+    const dailyGoal = req.session.dailyGoal || 5000;
+
+    // Process sales data for last 7 days
+    // Create array of last 7 days
+    const last7Days = [];
+    const last7DaysLabels = [];
+    const today = new Date();
+    
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toISOString().split('T')[0]; // YYYY-MM-DD format
+      last7Days.push(dateStr);
+      
+      // Create Thai label
+      const dayNames = ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.'];
+      const dayName = dayNames[date.getDay()];
+      const day = date.getDate();
+      const month = date.getMonth() + 1;
+      
+      if (i === 0) {
+        last7DaysLabels.push('วันนี้');
+      } else if (i === 1) {
+        last7DaysLabels.push('เมื่อวาน');
+      } else {
+        last7DaysLabels.push(`${day}/${month}`);
+      }
+    }
+
+    // Map sales data to the 7 days array
+    const salesMap = {};
+    salesLast7Days.forEach(sale => {
+      salesMap[sale.date] = sale.revenue;
+    });
+
+    const salesData = last7Days.map(date => salesMap[date] || 0);
 
     // Create complete status breakdown with all 6 statuses
     const allStatuses = ['pending', 'preparing', 'delivering', 'success', 'cancelled', 'rejected'];
@@ -1415,6 +1688,8 @@ app.get("/dashboard", async (req, res) => {
     }));
 
     // Keep ingredients and etc separate (don't combine)
+    console.log('[Dashboard] bestSellingPizza:', bestSellingPizza.length, 'items');
+    
     res.render('dashboard', {
       loggedin: req.session.loggedin,
       username: req.session.username,
@@ -1427,8 +1702,13 @@ app.get("/dashboard", async (req, res) => {
         todayRevenue: todayRevenue.revenue || 0,
         dailyGoal: dailyGoal
       },
+      salesLast7Days: {
+        labels: last7DaysLabels,
+        data: salesData
+      },
       statusBreakdown: completeStatusBreakdown || [],
       bestSelling: bestSelling || [],
+      bestSellingPizza: bestSellingPizza || [], // NEW: Pizza-only data for chart
       lowStockIngredients: lowStockIngredients || [],
       lowStockEtc: lowStockEtc || [],
       recentOrders: recentOrders || []
@@ -1441,8 +1721,10 @@ app.get("/dashboard", async (req, res) => {
       username: req.session.username,
       user_privilege: req.session.user_privilege || "",
       stats: { totalOrders: 0, totalRevenue: 0, totalCustomers: 0, topPizza: null, todayRevenue: 0, dailyGoal: 5000 },
+      salesLast7Days: { labels: ['วันนี้'], data: [0] },
       statusBreakdown: [],
       bestSelling: [],
+      bestSellingPizza: [], // NEW
       lowStockIngredients: [],
       lowStockEtc: [],
       recentOrders: [],

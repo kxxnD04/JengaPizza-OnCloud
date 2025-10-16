@@ -8,6 +8,8 @@
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"></script>
     <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script>
+    <!-- Chart.js for graphs -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
     <title>Dashboard - Jenga Pizza</title>
     <style>
         @font-face {
@@ -370,6 +372,91 @@
             color: #c62828;
         }
 
+        /* Chart Container */
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin-top: 20px;
+        }
+
+        /* Filter inside chart */
+        .filter-select {
+            padding: 6px 12px;
+            border: 2px solid #e9ecef;
+            border-radius: 6px;
+            font-family: Prompt;
+            background: white;
+            cursor: pointer;
+            transition: border-color 0.3s;
+            font-size: 0.9rem;
+        }
+
+        .filter-select:focus {
+            outline: none;
+            border-color: rgb(187, 62, 0);
+        }
+
+        .refresh-btn {
+            background: rgb(187, 62, 0);
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.2s;
+            font-size: 1.1rem;
+        }
+
+        .refresh-btn:hover {
+            background: rgb(160, 50, 0);
+        }
+
+        .refresh-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        /* Goal Setting */
+        .goal-setting {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .goal-input {
+            width: 150px;
+            padding: 8px 12px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-family: Prompt;
+            font-weight: bold;
+            color: rgb(187, 62, 0);
+        }
+
+        .goal-input:focus {
+            outline: none;
+            border-color: rgb(187, 62, 0);
+        }
+
+        .btn-save-goal {
+            background: rgb(187, 62, 0);
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.3s;
+        }
+
+        .btn-save-goal:hover {
+            background: rgb(160, 50, 0);
+        }
+
+
+
         @media (max-width: 768px) {
             .stat-card {
                 margin-bottom: 15px;
@@ -455,6 +542,88 @@
             </div>
         </div>
 
+        <!-- Today's Revenue & Goal Card (Full Width) -->
+        <div class="row">
+            <div class="col-12">
+                <div class="stat-card" style="background: linear-gradient(135deg, #fff 0%, #fffaf7 100%); border-left: 4px solid rgb(255, 120, 50);">
+                    <div class="row align-items-center">
+                        <div class="col-lg-3 col-md-6 mb-3 mb-lg-0">
+                            <div style="text-align: center;">
+                                <div class="stat-icon" style="margin-bottom: 5px;">📅</div>
+                                <div class="stat-value" style="font-size: 1.8rem; margin: 5px 0;">฿<span id="todayRevenue"><%= stats.todayRevenue.toLocaleString() %></span></div>
+                                <div class="stat-label">ยอดขายวันนี้</div>
+                            </div>
+                        </div>
+                        <div class="col-lg-9 col-md-6">
+                            <div style="padding-left: 20px; border-left: 2px solid #ffe8e0;">
+                                <div class="goal-setting" style="margin-bottom: 10px;">
+                                    <span class="goal-label">🎯 เป้าหมายวันนี้:</span>
+                                    <input type="number" id="dailyGoalInput" class="goal-input" value="<%= stats.dailyGoal %>" min="0" step="100" style="width: 120px;">
+                                    <span style="color: #6c757d; font-size: 0.9rem;">บาท</span>
+                                    <button class="btn-save-goal" onclick="saveDailyGoal()" style="padding: 6px 12px; font-size: 0.9rem;">บันทึก</button>
+                                </div>
+                                <div class="goal-header" style="margin-bottom: 8px; font-size: 0.85rem;">
+                                    <span class="goal-label">ความคืบหน้า</span>
+                                    <span class="goal-amount">฿<span id="todayRevenueProgress"><%= stats.todayRevenue.toLocaleString() %></span> / ฿<span id="dailyGoalDisplay"><%= stats.dailyGoal.toLocaleString() %></span></span>
+                                </div>
+                                <div class="progress-bar-container">
+                                    <% 
+                                    const percentage = Math.min((stats.todayRevenue / stats.dailyGoal) * 100, 100);
+                                    %>
+                                    <div class="progress-bar-fill" id="progressBarFill" style="width: <%= percentage %>%;">
+                                        <% if (percentage > 15) { %>
+                                            <span id="progressPercentage"><%= percentage.toFixed(0) %>%</span>
+                                        <% } %>
+                                    </div>
+                                    <% if (percentage <= 15) { %>
+                                        <div class="progress-percentage" id="progressPercentageAlt"><%= percentage.toFixed(0) %>%</div>
+                                    <% } %>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Row -->
+        <div class="row">
+            <!-- Sales Chart with Filter -->
+            <div class="col-lg-8 mb-4">
+                <div class="section-card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h3 class="section-title" style="margin-bottom: 0; border: none; padding-bottom: 0;">📈 กราฟยอดขาย</h3>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <select id="dateRange" class="filter-select">
+                                <option value="week" selected>7 วันล่าสุด</option>
+                                <option value="month">30 วันล่าสุด</option>
+                                <option value="all">ทั้งหมด</option>
+                            </select>
+                            <button class="refresh-btn" id="refreshBtn" onclick="manualRefresh()" style="padding: 6px 15px; font-size: 0.9rem;">
+                                🔄
+                            </button>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="salesChart"></canvas>
+                    </div>
+                    <div style="text-align: center; margin-top: 10px; font-size: 0.85rem; color: #6c757d;">
+                        <span id="refreshTimer">อัพเดทอัตโนมัติใน 30 วินาที</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Top 5 Pizza Pie Chart -->
+            <div class="col-lg-4 mb-4">
+                <div class="section-card">
+                    <h3 class="section-title">🍕 Top 5 พิซซ่าขายดี</h3>
+                    <div class="chart-container">
+                        <canvas id="pizzaPieChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="row">
             <!-- Order Status Breakdown -->
             <div class="col-lg-6 mb-4">
@@ -483,27 +652,6 @@
                             <p>ยังไม่มีคำสั่งซื้อในระบบ</p>
                         </div>
                     <% } %>
-
-                    <!-- Daily Goal Progress Bar -->
-                    <div class="goal-container">
-                        <div class="goal-header">
-                            <span class="goal-label">🎯 เป้าหมายยอดขายวันนี้</span>
-                            <span class="goal-amount">฿<%= stats.todayRevenue.toLocaleString() %> / ฿<%= stats.dailyGoal.toLocaleString() %></span>
-                        </div>
-                        <div class="progress-bar-container">
-                            <% 
-                            const percentage = Math.min((stats.todayRevenue / stats.dailyGoal) * 100, 100);
-                            %>
-                            <div class="progress-bar-fill" style="width: <%= percentage %>%;">
-                                <% if (percentage > 15) { %>
-                                    <%= percentage.toFixed(0) %>%
-                                <% } %>
-                            </div>
-                            <% if (percentage <= 15) { %>
-                                <div class="progress-percentage"><%= percentage.toFixed(0) %>%</div>
-                            <% } %>
-                        </div>
-                    </div>
                 </div>
             </div>
 
@@ -619,6 +767,337 @@
     <footer>
         <%- include('footer') %>
     </footer>
+
+    <script>
+        let salesLineChart, pizzaPieChart;
+        let refreshInterval;
+        let refreshCountdown = 30;
+
+        // Initialize charts on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeCharts();
+            startAutoRefresh();
+            
+            // Add event listener for date range filter
+            const dateRangeSelect = document.getElementById('dateRange');
+            if (dateRangeSelect) {
+                dateRangeSelect.addEventListener('change', function() {
+                    updateDashboard();
+                });
+            }
+        });
+
+        // Initialize Sales Chart (7 Days)
+        function initializeCharts() {
+            // Sales Line Chart
+            const salesCtx = document.getElementById('salesChart');
+            if (salesCtx) {
+                salesLineChart = new Chart(salesCtx, {
+                    type: 'line',
+                    data: {
+                        labels: [
+                            <% salesLast7Days.labels.forEach(function(label, index) { %>
+                                '<%= label %>'<%= index < salesLast7Days.labels.length - 1 ? ',' : '' %>
+                            <% }); %>
+                        ],
+                        datasets: [{
+                            label: 'ยอดขาย (บาท)',
+                            data: [
+                                <% salesLast7Days.data.forEach(function(value, index) { %>
+                                    <%= value %><%= index < salesLast7Days.data.length - 1 ? ',' : '' %>
+                                <% }); %>
+                            ],
+                            borderColor: 'rgb(187, 62, 0)',
+                            backgroundColor: 'rgba(187, 62, 0, 0.1)',
+                            tension: 0.4,
+                            fill: true,
+                            pointRadius: 5,
+                            pointHoverRadius: 7,
+                            pointBackgroundColor: 'rgb(187, 62, 0)',
+                            pointBorderColor: '#fff',
+                            pointBorderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: true,
+                                labels: {
+                                    font: { family: 'Prompt' }
+                                }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return 'ยอดขาย: ฿' + context.parsed.y.toLocaleString();
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    callback: function(value) {
+                                        return '฿' + value.toLocaleString();
+                                    },
+                                    font: { family: 'Prompt' }
+                                }
+                            },
+                            x: {
+                                ticks: {
+                                    font: { family: 'Prompt' }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            // Top 5 Pizza Chart (Pizza only - from dedicated query)
+            const pizzaCtx = document.getElementById('pizzaPieChart');
+            if (pizzaCtx) {
+                <% if (bestSellingPizza && bestSellingPizza.length > 0) { %>
+                const pizzaData = {
+                    labels: [
+                        <% bestSellingPizza.forEach(function(item, index) { %>
+                            '<%= item.item_name %>'<%= index < bestSellingPizza.length - 1 ? ',' : '' %>
+                        <% }); %>
+                    ],
+                    datasets: [{
+                        data: [
+                            <% bestSellingPizza.forEach(function(item, index) { %>
+                                <%= item.total_sold %><%= index < bestSellingPizza.length - 1 ? ',' : '' %>
+                            <% }); %>
+                        ],
+                        backgroundColor: [
+                            'rgb(187, 62, 0)',
+                            'rgb(220, 80, 20)',
+                            'rgb(255, 120, 50)',
+                            'rgb(255, 160, 100)',
+                            'rgb(255, 200, 150)'
+                        ]
+                    }]
+                };
+                <% } else { %>
+                const pizzaData = {
+                    labels: ['ยังไม่มีข้อมูล'],
+                    datasets: [{
+                        data: [1],
+                        backgroundColor: ['#e9ecef']
+                    }]
+                };
+                <% } %>
+
+                pizzaPieChart = new Chart(pizzaCtx, {
+                    type: 'doughnut',
+                    data: pizzaData,
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    font: { family: 'Prompt', size: 11 },
+                                    padding: 10
+                                }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return context.label + ': ' + context.parsed + ' ชิ้น';
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        // Auto Refresh Function
+        let countdownInterval;
+        function startAutoRefresh() {
+            // Clear previous countdown if exists
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+            }
+            
+            refreshCountdown = 30;
+            document.getElementById('refreshTimer').textContent = `อัพเดทอัตโนมัติใน ${refreshCountdown} วินาที`;
+            
+            // Update countdown display
+            countdownInterval = setInterval(() => {
+                refreshCountdown--;
+                
+                if (refreshCountdown > 0) {
+                    document.getElementById('refreshTimer').textContent = `อัพเดทอัตโนมัติใน ${refreshCountdown} วินาที`;
+                } else {
+                    clearInterval(countdownInterval);
+                    updateDashboard();
+                }
+            }, 1000);
+        }
+
+        // Manual Refresh
+        function manualRefresh() {
+            const btn = document.getElementById('refreshBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+            
+            // Clear auto-refresh and restart
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+            }
+            
+            updateDashboard();
+        }
+
+        // Update Dashboard Data
+        function updateDashboard() {
+            const dateRange = document.getElementById('dateRange').value;
+            
+            // Show loading state
+            const refreshBtn = document.getElementById('refreshBtn');
+            refreshBtn.disabled = true;
+            refreshBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+            
+            // Fetch new data from API
+            fetch(`/dashboard/data?range=${dateRange}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Update Sales Chart
+                        if (salesLineChart && data.salesChart && data.salesChart.labels && data.salesChart.data) {
+                            // Check if data is valid
+                            if (data.salesChart.labels.length > 0) {
+                                salesLineChart.data.labels = data.salesChart.labels;
+                                salesLineChart.data.datasets[0].data = data.salesChart.data;
+                                salesLineChart.update();
+                            } else {
+                                // No data - show empty state
+                                salesLineChart.data.labels = ['ไม่มีข้อมูล'];
+                                salesLineChart.data.datasets[0].data = [0];
+                                salesLineChart.update();
+                            }
+                        }
+
+                        // Update Today's Revenue in both places
+                        if (data.todayRevenue !== undefined) {
+                            // Update in Total Revenue Card
+                            const todayRevenueEl = document.getElementById('todayRevenue');
+                            if (todayRevenueEl) {
+                                todayRevenueEl.textContent = data.todayRevenue.toLocaleString();
+                            }
+                            
+                            // Update in Progress Bar
+                            const todayRevenueProgressEl = document.getElementById('todayRevenueProgress');
+                            if (todayRevenueProgressEl) {
+                                todayRevenueProgressEl.textContent = data.todayRevenue.toLocaleString();
+                            }
+                        }
+                    } else {
+                        console.error('Error fetching dashboard data:', data.message);
+                        alert('❌ เกิดข้อผิดพลาด: ' + (data.message || 'ไม่สามารถดึงข้อมูลได้'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                })
+                .finally(() => {
+                    // Restore button state and restart countdown
+                    refreshBtn.disabled = false;
+                    refreshBtn.innerHTML = '🔄';
+                    startAutoRefresh();
+                });
+        }
+
+        // Save Daily Goal and Update Progress Bar
+        function saveDailyGoal() {
+            const goalValue = document.getElementById('dailyGoalInput').value;
+            
+            if (!goalValue || goalValue < 0) {
+                alert('กรุณาใส่ค่าเป้าหมายที่ถูกต้อง');
+                return;
+            }
+
+            fetch('/dashboard/set-goal', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ dailyGoal: parseInt(goalValue) })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Update goal display
+                    document.getElementById('dailyGoalDisplay').textContent = parseInt(goalValue).toLocaleString();
+                    
+                    // Fetch today's revenue to recalculate progress
+                    fetch('/dashboard/data?range=week')
+                        .then(res => res.json())
+                        .then(todayData => {
+                            if (todayData.success && todayData.todayRevenue !== undefined) {
+                                const todayRevenue = todayData.todayRevenue;
+                                const newGoal = parseInt(goalValue);
+                                const newPercentage = Math.min((todayRevenue / newGoal) * 100, 100).toFixed(0);
+                                
+                                // Update revenue display in Total Revenue Card
+                                const todayRevenueEl = document.getElementById('todayRevenue');
+                                if (todayRevenueEl) {
+                                    todayRevenueEl.textContent = todayRevenue.toLocaleString();
+                                }
+                                
+                                // Update revenue display in Progress Bar
+                                const todayRevenueProgressEl = document.getElementById('todayRevenueProgress');
+                                if (todayRevenueProgressEl) {
+                                    todayRevenueProgressEl.textContent = todayRevenue.toLocaleString();
+                                }
+                                
+                                // Update progress bar
+                                const progressBar = document.getElementById('progressBarFill');
+                                if (progressBar) {
+                                    progressBar.style.width = newPercentage + '%';
+                                }
+                                
+                                const percentageText = document.getElementById('progressPercentage');
+                                const percentageAlt = document.getElementById('progressPercentageAlt');
+                                
+                                if (newPercentage > 15) {
+                                    if (percentageText) percentageText.textContent = newPercentage + '%';
+                                    if (percentageAlt) percentageAlt.style.display = 'none';
+                                } else {
+                                    if (percentageText) percentageText.textContent = '';
+                                    if (percentageAlt) {
+                                        percentageAlt.textContent = newPercentage + '%';
+                                        percentageAlt.style.display = 'block';
+                                    }
+                                }
+                                
+                                alert('✅ บันทึกเป้าหมายสำเร็จ!');
+                            }
+                        });
+                } else {
+                    alert('❌ เกิดข้อผิดพลาด: ' + (data.message || 'ไม่สามารถบันทึกได้'));
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('❌ เกิดข้อผิดพลาดในการเชื่อมต่อ');
+            });
+        }
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+            }
+        });
+    </script>
 
 </body>
 </html>
