@@ -13,11 +13,16 @@ const { log, error } = require("console");
 
 // Configure AWS S3 Client (v3)
 const s3Client = new S3Client({
-  region: process.env.AWS_REGION || 'us-east-1'
+  region: process.env.AWS_REGION || 'us-east-1',
+  credentials: process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY ? {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+  } : undefined // undefined จะใช้ IAM Role (บน EC2)
 });
 
 console.log('S3 Client initialized with region:', process.env.AWS_REGION || 'us-east-1');
 console.log('S3 Bucket:', process.env.S3_BUCKET_NAME || 'jengapizza-uploads-202501');
+console.log('Using credentials:', process.env.AWS_ACCESS_KEY_ID ? 'from .env (localhost)' : 'from IAM Role (EC2)');
 
 // Configure multer to use memory storage (แทน multer-s3)
 const upload = multer({
@@ -1109,6 +1114,179 @@ app.get("/aboutus", (req, res) => {
 app.get("/faq", (req, res) => {
   res.render('faq', { loggedin: req.session.loggedin, username: req.session.username || "", user_privilege: req.session.user_privilege || "" });
 });
+
+// ==================== USER MANAGEMENT ROUTES (ADMIN ONLY) ====================
+
+// GET: แสดงหน้าจัดการ Users
+app.get("/admin/users", async (req, res) => {
+  if (!req.session.loggedin || req.session.user_privilege !== "admin") {
+    return res.redirect('/home?nli=true');
+  }
+
+  res.render('admin_users', {
+    loggedin: req.session.loggedin,
+    username: req.session.username || "",
+    user_privilege: req.session.user_privilege || ""
+  });
+});
+
+// GET: API ดึงข้อมูล Users ทั้งหมด (JSON)
+app.get("/api/users", async (req, res) => {
+  if (!req.session.loggedin || req.session.user_privilege !== "admin") {
+    return res.status(403).json({ success: false, message: "ไม่มีสิทธิ์เข้าถึง" });
+  }
+
+  try {
+    const sql = `SELECT user_id, username, user_email, user_privilege FROM users ORDER BY user_id ASC`;
+    
+    const users = await new Promise((resolve, reject) => {
+      db.all(sql, (error, rows) => (error ? reject(error) : resolve(rows)));
+    });
+
+    res.json({ success: true, users: users });
+  } catch (error) {
+    console.error("Get users error:", error);
+    res.status(500).json({ success: false, message: "เกิดข้อผิดพลาดในการดึงข้อมูล" });
+  }
+});
+
+// POST: สร้าง User ใหม่
+app.post("/admin/create-user", async (req, res) => {
+  if (!req.session.loggedin || req.session.user_privilege !== "admin") {
+    return res.status(403).json({ success: false, message: "ไม่มีสิทธิ์เข้าถึง" });
+  }
+
+  const { username, email, password, user_privilege } = req.body;
+
+  // Validation
+  if (!username || !email || !password || !user_privilege) {
+    return res.json({ success: false, message: "กรุณากรอกข้อมูลให้ครบถ้วน" });
+  }
+
+  if (password.length < 6) {
+    return res.json({ success: false, message: "รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร" });
+  }
+
+  if (!['customer', 'admin', 'employee'].includes(user_privilege)) {
+    return res.json({ success: false, message: "ระดับสิทธิ์ไม่ถูกต้อง" });
+  }
+
+  try {
+    // เช็คว่า username หรือ email ซ้ำหรือไม่
+    const checkSql = `SELECT * FROM users WHERE username = ? OR user_email = ?`;
+    const existing = await new Promise((resolve, reject) => {
+      db.all(checkSql, [username, email], (error, rows) => (error ? reject(error) : resolve(rows)));
+    });
+
+    if (existing.length > 0) {
+      return res.json({ success: false, message: "ชื่อผู้ใช้หรืออีเมลนี้ถูกใช้ไปแล้ว" });
+    }
+
+    // สร้าง user ใหม่
+    const insertSql = `INSERT INTO users (username, user_email, user_password, user_privilege) VALUES (?, ?, ?, ?)`;
+    await new Promise((resolve, reject) => {
+      db.run(insertSql, [username, email, password, user_privilege], function(error) {
+        error ? reject(error) : resolve(this);
+      });
+    });
+
+    res.json({ success: true, message: "เพิ่มผู้ใช้สำเร็จ" });
+  } catch (error) {
+    console.error("Create user error:", error);
+    res.status(500).json({ success: false, message: "เกิดข้อผิดพลาด: " + error.message });
+  }
+});
+
+// PUT: แก้ไขข้อมูล User
+app.put("/admin/update-user", async (req, res) => {
+  if (!req.session.loggedin || req.session.user_privilege !== "admin") {
+    return res.status(403).json({ success: false, message: "ไม่มีสิทธิ์เข้าถึง" });
+  }
+
+  const { user_id, username, email, password, user_privilege } = req.body;
+
+  // Validation
+  if (!user_id || !username || !email || !user_privilege) {
+    return res.json({ success: false, message: "กรุณากรอกข้อมูลให้ครบถ้วน" });
+  }
+
+  if (password && password.length < 6) {
+    return res.json({ success: false, message: "รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร" });
+  }
+
+  if (!['customer', 'admin', 'employee'].includes(user_privilege)) {
+    return res.json({ success: false, message: "ระดับสิทธิ์ไม่ถูกต้อง" });
+  }
+
+  try {
+    // เช็คว่า username หรือ email ซ้ำกับคนอื่นหรือไม่
+    const checkSql = `SELECT * FROM users WHERE (username = ? OR user_email = ?) AND user_id != ?`;
+    const existing = await new Promise((resolve, reject) => {
+      db.all(checkSql, [username, email, user_id], (error, rows) => (error ? reject(error) : resolve(rows)));
+    });
+
+    if (existing.length > 0) {
+      return res.json({ success: false, message: "ชื่อผู้ใช้หรืออีเมลนี้ถูกใช้ไปแล้ว" });
+    }
+
+    // อัพเดทข้อมูล
+    let updateSql, params;
+    if (password) {
+      // อัพเดทพร้อมรหัสผ่านใหม่
+      updateSql = `UPDATE users SET username = ?, user_email = ?, user_password = ?, user_privilege = ? WHERE user_id = ?`;
+      params = [username, email, password, user_privilege, user_id];
+    } else {
+      // อัพเดทโดยไม่เปลี่ยนรหัสผ่าน
+      updateSql = `UPDATE users SET username = ?, user_email = ?, user_privilege = ? WHERE user_id = ?`;
+      params = [username, email, user_privilege, user_id];
+    }
+
+    await new Promise((resolve, reject) => {
+      db.run(updateSql, params, function(error) {
+        error ? reject(error) : resolve(this);
+      });
+    });
+
+    res.json({ success: true, message: "แก้ไขข้อมูลผู้ใช้สำเร็จ" });
+  } catch (error) {
+    console.error("Update user error:", error);
+    res.status(500).json({ success: false, message: "เกิดข้อผิดพลาด: " + error.message });
+  }
+});
+
+// DELETE: ลบ User
+app.delete("/admin/delete-user", async (req, res) => {
+  if (!req.session.loggedin || req.session.user_privilege !== "admin") {
+    return res.status(403).json({ success: false, message: "ไม่มีสิทธิ์เข้าถึง" });
+  }
+
+  const { user_id } = req.body;
+
+  if (!user_id) {
+    return res.json({ success: false, message: "ไม่พบข้อมูลผู้ใช้" });
+  }
+
+  // ป้องกันไม่ให้ลบตัวเอง
+  if (parseInt(user_id) === req.session.user_id) {
+    return res.json({ success: false, message: "ไม่สามารถลบบัญชีของตัวเองได้" });
+  }
+
+  try {
+    const deleteSql = `DELETE FROM users WHERE user_id = ?`;
+    await new Promise((resolve, reject) => {
+      db.run(deleteSql, [user_id], function(error) {
+        error ? reject(error) : resolve(this);
+      });
+    });
+
+    res.json({ success: true, message: "ลบผู้ใช้สำเร็จ" });
+  } catch (error) {
+    console.error("Delete user error:", error);
+    res.status(500).json({ success: false, message: "เกิดข้อผิดพลาด: " + error.message });
+  }
+});
+
+// ==================== END USER MANAGEMENT ROUTES ====================
 
 app.get("/dashboard", async (req, res) => {
   // Check if user is admin or employee

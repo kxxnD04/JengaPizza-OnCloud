@@ -1,4 +1,4 @@
-<link rel="stylesheet" href="header_style.css">
+<link rel="stylesheet" href="/header_style.css">
 
 <!-- navbar -->
 <div class="navbar">
@@ -114,6 +114,12 @@
               <img src="<%= S3_BUCKET_URL %>/images/manage_order-icon.png" alt="FAQ icon">
               <a href="/tracking_seller">จัดการคำสั่งซื้อ</a>
             </div>
+            <% if(user_privilege==='admin'){ %>
+            <div class="sidebar-menu-item">
+              <img src="<%= S3_BUCKET_URL %>/images/Users.png" alt="User Management icon">
+              <a href="/admin/users">จัดการผู้ใช้</a>
+            </div>
+            <% } %>
 
             <% } else if(loggedin && user_privilege=="customer" ){ %>
               <hr class="sidebar-divider">
